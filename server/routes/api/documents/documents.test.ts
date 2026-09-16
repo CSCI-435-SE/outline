@@ -4299,6 +4299,31 @@ describe("#documents.archive", () => {
     expect(body.data.archivedAt).toBeTruthy();
   });
 
+  it("should persist and return an archive reason when provided", async () => {
+    const admin = await buildAdmin();
+    const user = await buildUser({ teamId: admin.teamId });
+    const collection = await buildCollection({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const document = await buildDocument({
+      userId: admin.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+    });
+    const res = await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+        reason: "No longer relevant to the current project",
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.archivedReason).toEqual(
+      "No longer relevant to the current project"
+    );
+  });
+
   it("should require authentication", async () => {
     const document = await buildDocument();
     const res = await server.post("/api/documents.archive", {

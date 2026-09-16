@@ -313,6 +313,14 @@ class Document extends ArchivableModel<
   @SkipChangeset
   summary: string;
 
+  @Length({
+    max: DocumentValidation.maxArchivedReasonLength,
+    msg: `Archived reason must be ${DocumentValidation.maxArchivedReasonLength} characters or less`,
+  })
+  @Column(DataType.TEXT)
+  @SkipChangeset
+  archivedReason: string | null;
+
   @Column(DataType.ARRAY(DataType.STRING))
   previousTitles: string[];
 
@@ -1195,7 +1203,7 @@ class Document extends ArchivableModel<
 
   // Moves a document from being visible to the team within a collection
   // to the archived area, where it can be subsequently restored.
-  archiveWithCtx = async (ctx: APIContext) => {
+  archiveWithCtx = async (ctx: APIContext, reason?: string) => {
     const { transaction } = ctx.state;
     const collection = this.collectionId
       ? await Collection.findByPk(this.collectionId, {
@@ -1212,7 +1220,7 @@ class Document extends ArchivableModel<
       }
     }
 
-    await this.archiveWithChildren(ctx);
+    await this.archiveWithChildren(ctx, reason);
     return this;
   };
 
@@ -1395,13 +1403,14 @@ class Document extends ArchivableModel<
 
     await restoreChildren(this.id);
     this.archivedAt = null;
+    this.archivedReason = null;
     this.lastModifiedById = user.id;
     this.updatedBy = user;
     this.collectionId = collectionId;
     return this.saveWithCtx(ctx, undefined, { name: "unarchive" });
   };
 
-  private archiveWithChildren = async (ctx: APIContext) => {
+  private archiveWithChildren = async (ctx: APIContext, reason?: string) => {
     const { user } = ctx.state.auth;
     const { transaction } = ctx.state;
     const archivedAt = new Date();
@@ -1427,6 +1436,9 @@ class Document extends ArchivableModel<
 
     await archiveChildren(this.id);
     this.archivedAt = archivedAt;
+    // Only recorded against the document the user directly archived, not
+    // cascaded to children, since the explanation only applies to their action.
+    this.archivedReason = reason ?? null;
     this.lastModifiedById = user.id;
     this.updatedBy = user;
     return this.saveWithCtx(ctx, undefined, { name: "archive" });
