@@ -3,13 +3,14 @@ import { v4 as uuidv4 } from "uuid";
 import { m } from "framer-motion";
 import { action } from "mobx";
 import { observer } from "mobx-react";
-import { ImageIcon } from "outline-icons";
+import { AttachmentIcon, CloseIcon, ImageIcon } from "outline-icons";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useTheme } from "styled-components";
 import { parseReactionShorthand } from "@shared/editor/lib/emoji";
 import type { ProsemirrorData } from "@shared/types";
+import { AttachmentPreset } from "@shared/types";
 import { getEventFiles } from "@shared/utils/files";
 import { AttachmentValidation, CommentValidation } from "@shared/validations";
 import Comment from "~/models/Comment";
@@ -23,6 +24,7 @@ import type { Editor as SharedEditor } from "~/editor";
 import useCurrentUser from "~/hooks/useCurrentUser";
 import useOnClickOutside from "~/hooks/useOnClickOutside";
 import useStores from "~/hooks/useStores";
+import { uploadFile } from "~/utils/files";
 import { Bubble } from "./CommentThreadItem";
 import { HighlightedText } from "./HighlightText";
 import lazyWithRetry from "~/utils/lazyWithRetry";
@@ -87,6 +89,7 @@ function CommentForm({
   const editorRef = React.useRef<SharedEditor>(null);
   const [forceRender, setForceRender] = React.useState(0);
   const [inputFocused, setInputFocused] = React.useState(autoFocus);
+  const [attachedFiles, setAttachedFiles] = React.useState<File[]>([]);
   const file = React.useRef<HTMLInputElement>(null);
   const hasFocusedOnMount = React.useRef(false);
   const theme = useTheme();
@@ -137,7 +140,21 @@ function CommentForm({
         documentId,
         data: draft,
       })
-      .then(() => onSubmit?.())
+      .then(async () => {
+        // upload files after comment is saved successfully
+        for (const f of attachedFiles) {
+          try {
+            await uploadFile(f, {
+              preset: AttachmentPreset.DocumentAttachment,
+              documentId,
+            });
+          } catch {
+            toast.error(t("Error uploading file"));
+          }
+        }
+        setAttachedFiles([]);
+        onSubmit?.();
+      })
       .catch(() => {
         onSaveDraft(commentDraft);
         setForceRender((s) => ++s);
@@ -146,9 +163,6 @@ function CommentForm({
         toast.error(t("Error creating comment"));
       });
 
-    // optimistically update the comment model. Setting the data here, rather
-    // than waiting for save() to resolve, avoids a frame where the rendered
-    // comment is empty before the saved data is applied.
     if (draft) {
       comment.data = draft;
     }
@@ -210,7 +224,21 @@ function CommentForm({
 
     comment
       .save()
-      .then(() => onSubmit?.())
+      .then(async () => {
+        // upload files after comment is saved successfully
+        for (const f of attachedFiles) {
+          try {
+            await uploadFile(f, {
+              preset: AttachmentPreset.DocumentAttachment,
+              documentId,
+            });
+          } catch {
+            toast.error(t("Error uploading file"));
+          }
+        }
+        setAttachedFiles([]);
+        onSubmit?.();
+      })
       .catch(() => {
         onSaveDraft(commentDraft);
         setForceRender((s) => ++s);
@@ -254,6 +282,7 @@ function CommentForm({
     onSaveDraft(undefined);
     setForceRender((s) => ++s);
     setInputFocused(false);
+    setAttachedFiles([]);
     await reset();
   };
 
@@ -275,7 +304,17 @@ function CommentForm({
       return;
     }
 
-    return editorRef.current?.insertFiles(event, files);
+    setAttachedFiles((prev) => [...prev, ...files]);
+    setInputFocused(true);
+
+    // reset input so the same file can be picked again
+    if (file.current) {
+      file.current.value = "";
+    }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleImageUpload = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -341,7 +380,6 @@ function CommentForm({
           ref={file}
           type="file"
           onChange={handleFilePicked}
-          accept={AttachmentValidation.imageContentTypes.join(", ")}
           tabIndex={-1}
         />
       </VisuallyHidden.Root>
@@ -382,15 +420,34 @@ function CommentForm({
               maxLength={CommentValidation.maxLength}
               placeholder={
                 placeholder ||
-                // isNew is only the case for comments that exist in draft state,
-                // they are marks in the document, but not yet saved to the db.
                 (thread?.isNew
                   ? `${t("Add a comment")}…`
                   : `${t("Add a reply")}…`)
               }
             />
           </React.Suspense>
-          {(inputFocused || draft) && (
+          {attachedFiles.length > 0 && (
+            <Flex column gap={4} style={{ marginTop: 4 }}>
+              {attachedFiles.map((f, i) => (
+                <Flex key={i} align="center" gap={6}>
+                  <AttachmentIcon size={16} color={theme.textTertiary} />
+                  <span
+                    style={{
+                      fontSize: 13,
+                      color: theme.textSecondary,
+                      flex: 1,
+                    }}
+                  >
+                    {f.name}
+                  </span>
+                  <NudeButton onClick={() => handleRemoveFile(i)}>
+                    <CloseIcon size={16} color={theme.textTertiary} />
+                  </NudeButton>
+                </Flex>
+              ))}
+            </Flex>
+          )}
+          {(inputFocused || draft || attachedFiles.length > 0) && (
             <Flex justify="space-between" gap={8}>
               <HStack>
                 <ButtonSmall type="submit" borderOnHover>
@@ -400,9 +457,9 @@ function CommentForm({
                   {t("Cancel")}
                 </ButtonSmall>
               </HStack>
-              <Tooltip content={t("Upload image")} placement="top">
+              <Tooltip content={t("Attach file")} placement="top">
                 <NudeButton onClick={handleImageUpload}>
-                  <ImageIcon color={theme.textTertiary} />
+                  <AttachmentIcon color={theme.textTertiary} />
                 </NudeButton>
               </Tooltip>
             </Flex>
