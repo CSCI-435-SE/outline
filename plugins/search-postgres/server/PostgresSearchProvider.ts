@@ -471,9 +471,6 @@ export default class PostgresSearchProvider extends BaseSearchProvider {
 
   /**
    * No-op for PostgreSQL — indexing is handled by database triggers.
-   *
-   * @param _model - unused.
-   * @param _item - unused.
    */
   async index(
     _model: SearchableModel,
@@ -484,10 +481,6 @@ export default class PostgresSearchProvider extends BaseSearchProvider {
 
   /**
    * No-op for PostgreSQL — removal is handled by database cascades.
-   *
-   * @param _model - unused.
-   * @param _id - unused.
-   * @param _teamId - unused.
    */
   async remove(
     _model: SearchableModel,
@@ -499,10 +492,6 @@ export default class PostgresSearchProvider extends BaseSearchProvider {
 
   /**
    * No-op for PostgreSQL — metadata is stored in the same tables.
-   *
-   * @param _model - unused.
-   * @param _id - unused.
-   * @param _metadata - unused.
    */
   async updateMetadata(
     _model: SearchableModel,
@@ -533,12 +522,12 @@ export default class PostgresSearchProvider extends BaseSearchProvider {
         : `ts_rank("searchVector", to_tsquery('english', :query))`;
 
       attributes.push([Sequelize.literal(rankExpression), "searchRanking"]);
-      replacements["query"] = PostgresSearchProvider.webSearchQuery(query);
+      const tsQuery = PostgresSearchProvider.webSearchQuery(query);
+      if (tsQuery) {
+        replacements["query"] = tsQuery;
+      }
     }
 
-    // When searching with a query and no explicit sort, prioritize search
-    // ranking as the primary sort criterion. Otherwise, use the specified sort
-    // with ranking as a tiebreaker.
     if (query && !sort) {
       order.push(["searchRanking", "DESC"]);
       order.push([SortFilter.UpdatedAt, DirectionFilter.DESC]);
@@ -564,14 +553,12 @@ export default class PostgresSearchProvider extends BaseSearchProvider {
   }
 
   private static buildResultContext(document: Document, query: string) {
-    // Reset regex lastIndex to avoid state issues with global regex
     PostgresSearchProvider.QUOTED_QUERY_REGEX.lastIndex = 0;
     const quotedQueries = Array.from(
       query.matchAll(PostgresSearchProvider.QUOTED_QUERY_REGEX)
     );
     const text = DocumentHelper.toPlainText(document);
 
-    // Regex to highlight quoted queries as ts_headline will not do this by default due to stemming.
     const fullMatchRegex = new RegExp(escapeRegExp(query), "i");
     const highlightRegex = new RegExp(
       [
@@ -586,11 +573,9 @@ export default class PostgresSearchProvider extends BaseSearchProvider {
       "gi"
     );
 
-    // Reset regex lastIndex to avoid state issues with global regex
     PostgresSearchProvider.BREAK_CHARS_REGEX.lastIndex = 0;
     const breakCharsRegex = PostgresSearchProvider.BREAK_CHARS_REGEX;
 
-    // chop text around the first match, prefer the first full match if possible.
     const fullMatchIndex = text.search(fullMatchRegex);
     const offsetStartIndex =
       (fullMatchIndex >= 0 ? fullMatchIndex : text.search(highlightRegex)) - 65;
@@ -639,9 +624,6 @@ export default class PostgresSearchProvider extends BaseSearchProvider {
         { "$groupMemberships.id$": { [Op.ne]: null } }
       );
 
-      // Allow users to see their own drafts that have no collection, where no
-      // membership or collection access applies. Drafts in collections remain
-      // gated by the collection/membership checks above.
       if (options.statusFilter?.includes(StatusFilter.Draft)) {
         where[Op.or].push({
           createdById: model.id,
@@ -652,9 +634,6 @@ export default class PostgresSearchProvider extends BaseSearchProvider {
       }
     }
 
-    // Ensure we're filtering by the users accessible collections. If
-    // collectionId is passed as an option it is assumed that the authorization
-    // has already been done in the router
     const collectionIds = options.collectionId
       ? [options.collectionId]
       : await model.collectionIds();
@@ -708,7 +687,6 @@ export default class PostgresSearchProvider extends BaseSearchProvider {
 
     if (
       options.statusFilter?.includes(StatusFilter.Draft) &&
-      // Only ever include draft results for the user's own documents
       model instanceof User
     ) {
       statusQuery.push({
@@ -789,13 +767,24 @@ export default class PostgresSearchProvider extends BaseSearchProvider {
       }
 
       if (limitedQuery || iLikeQueries.length === 0) {
-        where[Op.and].push(
-          Sequelize.fn(
-            `"searchVector" @@ to_tsquery`,
-            "english",
-            Sequelize.literal(":query")
-          )
-        );
+        const tsQuery = PostgresSearchProvider.webSearchQuery(limitedQuery);
+        if (tsQuery) {
+          where[Op.and].push(
+            Sequelize.fn(
+              `"searchVector" @@ to_tsquery`,
+              "english",
+              Sequelize.literal(":query")
+            )
+          );
+        } else {
+          // Query was all punctuation/symbols — fall back to iLike on title and text
+          where[Op.and].push({
+            [Op.or]: [
+              { title: { [Op.iLike]: `%${options.query}%` } },
+              { text: { [Op.iLike]: `%${options.query}%` } },
+            ],
+          });
+        }
       }
     }
 
@@ -868,14 +857,8 @@ export default class PostgresSearchProvider extends BaseSearchProvider {
 
     return (
       queryParser()(
-        // Although queryParser trims the query, looks like there's a
-        // bug for certain cases where it removes other characters in addition to
-        // spaces. Ref: https://github.com/caub/pg-tsquery/issues/27
         quotedSearch ? limitedQuery.trim() : `${limitedQuery.trim()}*`
       )
-        // Strip any trailing join (&) or escape (\) characters, in any
-        // combination, so we never hand to_tsquery an operator with no
-        // operand (e.g. a tail of "&\" would leave a dangling "&").
         .replace(/[&\\]+$/, "")
     );
   }
@@ -883,11 +866,7 @@ export default class PostgresSearchProvider extends BaseSearchProvider {
   private static escapeQuery(query: string): string {
     return (
       query
-        // replace "\" with escaped "\\" because sequelize.escape doesn't do it
-        // see: https://github.com/sequelize/sequelize/issues/2950
         .replace(/\\/g, "\\\\")
-        // replace ":" with escaped "\:" because it's a reserved character in tsquery
-        // see: https://github.com/outline/outline/issues/6542
         .replace(/:/g, "\\:")
     );
   }
