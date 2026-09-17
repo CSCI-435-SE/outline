@@ -32,6 +32,8 @@ type SaveOptions = JSONObject & {
   publish?: boolean;
   done?: boolean;
   autosave?: boolean;
+  /** An optional commit-style message describing why this change was made, recorded on the resulting revision */
+  message?: string;
 };
 
 export default class Document extends ArchivableModel implements Searchable {
