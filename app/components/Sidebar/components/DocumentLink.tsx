@@ -381,6 +381,9 @@ const DocumentLinkInner = observer(function DocumentLinkInner({
     onRename: handleRename,
   });
 
+  const unreadBadge =
+    !!document?.isBadgedNew && document.createdBy?.id !== user.id;
+
   const showMenuActions = !isDraggingAnyDocument;
   const menu =
     showMenuActions && document ? (
@@ -422,6 +425,7 @@ const DocumentLinkInner = observer(function DocumentLinkInner({
       isDraft={isDraft}
       scrollIntoViewIfNeeded={false}
       icon={iconElement}
+      unreadBadge={unreadBadge}
       canEdit={canUpdate}
       labelText={title}
       onTitleChange={handleTitleChange}
