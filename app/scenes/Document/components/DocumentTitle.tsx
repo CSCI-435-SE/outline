@@ -76,6 +76,7 @@ const DocumentTitle = React.forwardRef(function DocumentTitle_(
   const { t } = useTranslation();
   const ref = React.useRef<RefHandle>(null);
   const [iconPickerIsOpen, handleOpen, setIconPickerClosed] = useBoolean();
+  const [isFocused, setIsFocused] = React.useState(false); // + character counter state
   const { editor } = useDocumentContext();
   const can = usePolicy(documentId);
 
@@ -99,12 +100,17 @@ const DocumentTitle = React.forwardRef(function DocumentTitle_(
       ) {
         return;
       }
+      setIsFocused(false); // + hide counter on blur
       if (onBlur) {
         onBlur(ev);
       }
     },
     [onBlur]
   );
+
+  const handleFocus = React.useCallback(() => {
+    setIsFocused(true); // + show counter on focus
+  }, []);
 
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent) => {
@@ -239,47 +245,65 @@ const DocumentTitle = React.forwardRef(function DocumentTitle_(
     <Icon value={icon} initial={initial} color={color} size={40} />
   ) : null;
 
+  // + Compute counter values
+  const maxLength = DocumentValidation.maxTitleLength;
+  const isNearLimit = title.length >= maxLength - 20;
+
   return (
-    <Title
-      onClick={handleClick}
-      onChange={handleChange}
-      onKeyDown={handleKeyDown}
-      onPaste={handlePaste}
-      onBlur={handleBlur}
-      placeholder={placeholder}
-      value={title}
-      $iconPickerIsOpen={iconPickerIsOpen}
-      $containsIcon={!!icon}
-      autoFocus={!title}
-      maxLength={DocumentValidation.maxTitleLength}
-      readOnly={readOnly}
-      aria-label={t("Document title")}
-      dir="auto"
-      ref={mergeRefs([ref, externalRef])}
-    >
-      {can.update && !readOnly ? (
-        <IconTitleWrapper dir={dir}>
-          <React.Suspense fallback={fallbackIcon}>
-            <StyledIconPicker
-              icon={icon ?? null}
-              color={color}
-              initial={initial}
-              size={40}
-              popoverPosition="bottom-start"
-              onChange={handleIconChange}
-              onOpen={handleOpen}
-              onClose={handleClose}
-              allowDelete
-              borderOnHover
-            />
-          </React.Suspense>
-        </IconTitleWrapper>
-      ) : icon ? (
-        <IconTitleWrapper dir={dir} aria-hidden>
-          {fallbackIcon}
-        </IconTitleWrapper>
-      ) : null}
-    </Title>
+    // + Wrap in TitleWrapper so the counter can be positioned relative to the title
+    <TitleWrapper>
+      <Title
+        onClick={handleClick}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
+        onBlur={handleBlur}
+        onFocus={handleFocus} // +
+        placeholder={placeholder}
+        value={title}
+        $iconPickerIsOpen={iconPickerIsOpen}
+        $containsIcon={!!icon}
+        autoFocus={!title}
+        maxLength={maxLength}
+        readOnly={readOnly}
+        aria-label={t("Document title")}
+        dir="auto"
+        ref={mergeRefs([ref, externalRef])}
+      >
+        {can.update && !readOnly ? (
+          <IconTitleWrapper dir={dir}>
+            <React.Suspense fallback={fallbackIcon}>
+              <StyledIconPicker
+                icon={icon ?? null}
+                color={color}
+                initial={initial}
+                size={40}
+                popoverPosition="bottom-start"
+                onChange={handleIconChange}
+                onOpen={handleOpen}
+                onClose={handleClose}
+                allowDelete
+                borderOnHover
+              />
+            </React.Suspense>
+          </IconTitleWrapper>
+        ) : icon ? (
+          <IconTitleWrapper dir={dir} aria-hidden>
+            {fallbackIcon}
+          </IconTitleWrapper>
+        ) : null}
+      </Title>
+      {/* + Character counter: only shown while focused and not read-only */}
+      {isFocused && !readOnly && (
+        <CharCounter
+          $nearLimit={isNearLimit}
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {title.length}/{maxLength}
+        </CharCounter>
+      )}
+    </TitleWrapper>
   );
 });
 
@@ -292,6 +316,25 @@ type TitleProps = {
 // Extra area prevents gap between icon and beginning of title
 const StyledIconPicker = styled(IconPicker)`
   ${extraArea(8)}
+`;
+
+// + Wrapper to anchor the counter relative to the title block
+const TitleWrapper = styled.div`
+  position: relative;
+`;
+
+// + Counter badge: sits at the bottom-right of the title, fades in on focus
+const CharCounter = styled.span<{ $nearLimit: boolean }>`
+  position: absolute;
+  bottom: -1.25em;
+  right: 0;
+  font-size: 0.75em;
+  font-weight: 400;
+  color: ${(props) =>
+    props.$nearLimit ? s("danger")(props) : s("textTertiary")(props)};
+  pointer-events: none;
+  user-select: none;
+  transition: color 150ms ease;
 `;
 
 const Title = styled(ContentEditable)<TitleProps>`
