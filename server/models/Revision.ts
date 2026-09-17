@@ -193,17 +193,23 @@ class Revision extends ParanoidModel<
    * @param ctx context to use for DB operations
    * @param document The document to create from
    * @param collaboratorIds Optional array of user IDs who authored this revision
+   * @param name Optional commit-style message describing why this change was made
    * @returns A Promise that resolves when saved
    */
   static createFromDocument(
     ctx: APIContext,
     document: Document,
-    collaboratorIds?: string[]
+    collaboratorIds?: string[],
+    name?: string
   ) {
     const revision = this.buildFromDocument(document);
 
     if (collaboratorIds) {
       revision.collaboratorIds = collaboratorIds;
+    }
+
+    if (name) {
+      revision.name = name;
     }
 
     return revision.saveWithCtx(ctx);
