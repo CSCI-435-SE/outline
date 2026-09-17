@@ -8,6 +8,7 @@ import {
   TextEditMode,
   SortFilter,
 } from "@shared/types";
+import { DocumentValidation } from "@shared/validations";
 import { BaseSchema } from "@server/routes/api/schema";
 import { zodIconType, zodIdType, zodShareIdType } from "@server/utils/zod";
 import { ValidateColor } from "@server/validation";
@@ -362,7 +363,13 @@ export const DocumentsMoveSchema = BaseSchema.extend({
 export type DocumentsMoveReq = z.infer<typeof DocumentsMoveSchema>;
 
 export const DocumentsArchiveSchema = BaseSchema.extend({
-  body: BaseIdSchema,
+  body: BaseIdSchema.extend({
+    /** An optional explanation for why the document is being archived */
+    reason: z
+      .string()
+      .max(DocumentValidation.maxArchivedReasonLength)
+      .optional(),
+  }),
 });
 
 export type DocumentsArchiveReq = z.infer<typeof DocumentsArchiveSchema>;

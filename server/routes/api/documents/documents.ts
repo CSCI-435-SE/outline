@@ -1416,7 +1416,7 @@ router.post(
   validate(T.DocumentsArchiveSchema),
   transaction(),
   async (ctx: APIContext<T.DocumentsArchiveReq>) => {
-    const { id } = ctx.input.body;
+    const { id, reason } = ctx.input.body;
     const { user } = ctx.state.auth;
     const { transaction } = ctx.state;
 
@@ -1427,7 +1427,7 @@ router.post(
     });
     authorize(user, "archive", document);
 
-    await document.archiveWithCtx(ctx);
+    await document.archiveWithCtx(ctx, reason);
 
     ctx.body = {
       data: await presentDocument(ctx, document),
