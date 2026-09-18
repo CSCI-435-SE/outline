@@ -1,4 +1,4 @@
-import Document from "./Document";
+import Document from "~/models/Document";
 import stores from "~/stores";
 
 describe("Document model", () => {
