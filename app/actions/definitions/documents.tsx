@@ -434,6 +434,7 @@ export const starDocument = createAction({
   section: ActiveDocumentSection,
   icon: <StarredIcon />,
   keywords: "favorite bookmark",
+  shortcut: ["Control+Alt+KeyS"],
   visible: ({ activeDocumentId, stores }) => {
     if (!activeDocumentId) {
       return false;
@@ -460,6 +461,7 @@ export const unstarDocument = createAction({
   section: ActiveDocumentSection,
   icon: <UnstarredIcon />,
   keywords: "unfavorite unbookmark",
+  shortcut: ["Control+Alt+KeyS"],
   visible: ({ activeDocumentId, stores }) => {
     if (!activeDocumentId) {
       return false;
