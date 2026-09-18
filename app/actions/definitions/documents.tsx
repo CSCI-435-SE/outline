@@ -502,25 +502,14 @@ export const publishDocument = createAction({
     }
 
     const document = stores.documents.get(activeDocumentId);
-    if (document?.publishedAt) {
+    if (!document || document.publishedAt) {
       return;
     }
 
-    if (document?.collectionId) {
-      await document.save(undefined, {
-        publish: true,
-      });
-      toast.success(
-        t("Published {{ documentName }}", {
-          documentName: document.noun,
-        })
-      );
-    } else if (document) {
-      stores.dialogs.openModal({
-        title: t("Publish document"),
-        content: <DocumentPublish document={document} />,
-      });
-    }
+    stores.dialogs.openModal({
+      title: t("Publish document"),
+      content: <DocumentPublish document={document} />,
+    });
   },
 });
 

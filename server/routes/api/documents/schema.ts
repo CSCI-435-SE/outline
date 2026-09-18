@@ -8,6 +8,7 @@ import {
   TextEditMode,
   SortFilter,
 } from "@shared/types";
+import { RevisionValidation } from "@shared/validations";
 import { BaseSchema } from "@server/routes/api/schema";
 import { zodIconType, zodIdType, zodShareIdType } from "@server/utils/zod";
 import { ValidateColor } from "@server/validation";
@@ -283,6 +284,9 @@ export const DocumentsUpdateSchema = BaseSchema.extend({
 
     /** Boolean to denote if the doc should be published */
     publish: z.boolean().optional(),
+
+    /** An optional commit-style message describing why this change was made, recorded on the resulting revision */
+    message: z.string().max(RevisionValidation.maxNameLength).optional(),
 
     /** Doc template Id */
     templateId: z.uuid().nullish(),

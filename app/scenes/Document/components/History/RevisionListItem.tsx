@@ -142,7 +142,12 @@ const RevisionListItem = ({ item, document, ...rest }: Props) => {
               <Avatar model={item.createdBy} size={AvatarSize.Large} />
             )
           }
-          subtitle={<Meta>{meta}</Meta>}
+          subtitle={
+            <>
+              <Meta>{meta}</Meta>
+              {item.name && <Message title={item.name}>{item.name}</Message>}
+            </>
+          }
           actions={
             <StyledEventBoundary>
               <RevisionMenu document={document} revisionId={item.id} />
@@ -159,6 +164,11 @@ const RevisionListItem = ({ item, document, ...rest }: Props) => {
 
 const Meta = styled.div`
   ${ellipsis()})
+`;
+
+const Message = styled.div`
+  ${ellipsis()}
+  color: ${s("textTertiary")};
 `;
 
 const IconWrapper = styled(Text)`
