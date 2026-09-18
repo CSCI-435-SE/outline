@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useTheme } from "styled-components";
 import { parseReactionShorthand } from "@shared/editor/lib/emoji";
+import { getCommentCharacterCount } from "@shared/editor/lib/getCommentCharacterCount";
 import type { ProsemirrorData } from "@shared/types";
 import { getEventFiles } from "@shared/utils/files";
 import { AttachmentValidation, CommentValidation } from "@shared/validations";
@@ -18,6 +19,7 @@ import ButtonSmall from "~/components/ButtonSmall";
 import { useDocumentContext } from "~/components/DocumentContext";
 import Flex from "~/components/Flex";
 import NudeButton from "~/components/NudeButton";
+import Text from "~/components/Text";
 import Tooltip from "~/components/Tooltip";
 import type { Editor as SharedEditor } from "~/editor";
 import useCurrentUser from "~/hooks/useCurrentUser";
@@ -87,6 +89,7 @@ function CommentForm({
   const editorRef = React.useRef<SharedEditor>(null);
   const [forceRender, setForceRender] = React.useState(0);
   const [inputFocused, setInputFocused] = React.useState(autoFocus);
+  const [charCount, setCharCount] = React.useState(0);
   const file = React.useRef<HTMLInputElement>(null);
   const hasFocusedOnMount = React.useRef(false);
   const theme = useTheme();
@@ -118,6 +121,7 @@ function CommentForm({
     onSaveDraft(undefined);
     setForceRender((s) => ++s);
     setInputFocused(false);
+    setCharCount(0);
 
     const commentDraft = draft;
     const comment =
@@ -190,6 +194,7 @@ function CommentForm({
     const commentDraft = draft;
     onSaveDraft(undefined);
     setForceRender((s) => ++s);
+    setCharCount(0);
 
     const comment = new Comment(
       {
@@ -236,6 +241,11 @@ function CommentForm({
   ) => {
     const text = value(true, true);
     onSaveDraft(text ? value(false, true) : undefined);
+    setCharCount(
+      editorRef.current
+        ? getCommentCharacterCount(editorRef.current.view.state.doc)
+        : 0
+    );
   };
 
   const handleSave = () => {
@@ -254,6 +264,7 @@ function CommentForm({
     onSaveDraft(undefined);
     setForceRender((s) => ++s);
     setInputFocused(false);
+    setCharCount(0);
     await reset();
   };
 
@@ -294,6 +305,10 @@ function CommentForm({
   // Focus the editor when it's a new comment just mounted
   const handleMounted = React.useCallback(
     (ref) => {
+      if (ref) {
+        setCharCount(getCommentCharacterCount(ref.view.state.doc));
+      }
+
       if (autoFocus && ref && !hasFocusedOnMount.current) {
         if (!draft) {
           ref.focusAtStart();
@@ -400,11 +415,16 @@ function CommentForm({
                   {t("Cancel")}
                 </ButtonSmall>
               </HStack>
-              <Tooltip content={t("Upload image")} placement="top">
-                <NudeButton onClick={handleImageUpload}>
-                  <ImageIcon color={theme.textTertiary} />
-                </NudeButton>
-              </Tooltip>
+              <Flex align="center" gap={8}>
+                <Text size="xsmall" type="tertiary">
+                  {charCount}/{CommentValidation.maxLength}
+                </Text>
+                <Tooltip content={t("Upload image")} placement="top">
+                  <NudeButton onClick={handleImageUpload}>
+                    <ImageIcon color={theme.textTertiary} />
+                  </NudeButton>
+                </Tooltip>
+              </Flex>
             </Flex>
           )}
         </Bubble>
