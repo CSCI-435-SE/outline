@@ -23,6 +23,7 @@ function Archive() {
         }
         showCollection
         showTemplate
+        showArchivedReason
       />
     </Scene>
   );

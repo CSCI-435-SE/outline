@@ -1438,7 +1438,8 @@ class Document extends ArchivableModel<
     this.archivedAt = archivedAt;
     // Only recorded against the document the user directly archived, not
     // cascaded to children, since the explanation only applies to their action.
-    this.archivedReason = reason ?? null;
+    // Blank reasons are treated as no reason so the UI never shows an empty note.
+    this.archivedReason = reason?.trim() || null;
     this.lastModifiedById = user.id;
     this.updatedBy = user;
     return this.saveWithCtx(ctx, undefined, { name: "archive" });

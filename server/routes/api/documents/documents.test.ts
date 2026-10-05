@@ -10,6 +10,7 @@ import {
   UserRole,
 } from "@shared/types";
 import { TextHelper } from "@shared/utils/TextHelper";
+import { DocumentValidation } from "@shared/validations";
 import { createContext } from "@server/context";
 import { parser } from "@server/editor";
 import type { Group, User } from "@server/models";
@@ -4322,6 +4323,172 @@ describe("#documents.archive", () => {
     expect(body.data.archivedReason).toEqual(
       "No longer relevant to the current project"
     );
+  });
+
+  it("should store no reason when none is provided", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const res = await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.archivedReason).toBeNull();
+  });
+
+  it("should store no reason when the reason is empty", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const res = await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+        reason: "",
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.archivedAt).toBeTruthy();
+    expect(body.data.archivedReason).toBeNull();
+  });
+
+  it("should store no reason when the reason is only whitespace", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const res = await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+        reason: "   \n\t  ",
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.archivedReason).toBeNull();
+  });
+
+  it("should trim whitespace around the reason", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const res = await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+        reason: "  Superseded by the 2026 guide  ",
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.archivedReason).toEqual("Superseded by the 2026 guide");
+  });
+
+  it("should allow a reason at the maximum length", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const reason = "a".repeat(DocumentValidation.maxArchivedReasonLength);
+    const res = await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+        reason,
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.archivedReason).toEqual(reason);
+  });
+
+  it("should reject a reason over the maximum length", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const res = await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+        reason: "a".repeat(DocumentValidation.maxArchivedReasonLength + 1),
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(400);
+    expect(body.message).toContain("reason");
+
+    // The document must not have been archived
+    const reloaded = await Document.findByPk(document.id);
+    expect(reloaded?.archivedAt).toBeNull();
+    expect(reloaded?.archivedReason).toBeNull();
+  });
+
+  it("should not copy the reason to child documents", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+    });
+    const child = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      parentDocumentId: document.id,
+    });
+    const res = await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+        reason: "Project finished",
+      },
+    });
+    expect(res.status).toEqual(200);
+
+    await child.reload();
+    expect(child.archivedAt).toBeTruthy();
+    expect(child.archivedReason).toBeNull();
+  });
+
+  it("should clear the reason when the document is restored", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+    });
+    await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+        reason: "Project finished",
+      },
+    });
+    const res = await server.post("/api/documents.restore", user, {
+      body: {
+        id: document.id,
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.archivedAt).toBeNull();
+    expect(body.data.archivedReason).toBeNull();
   });
 
   it("should require authentication", async () => {

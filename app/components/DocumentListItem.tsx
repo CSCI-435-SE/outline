@@ -42,6 +42,7 @@ type Props = {
   showCollection?: boolean;
   showPublished?: boolean;
   showDraft?: boolean;
+  showArchivedReason?: boolean;
 };
 
 const SEARCH_RESULT_REGEX = /<b\b[^>]*>(.*?)<\/b>/gi;
@@ -78,6 +79,7 @@ function DocumentListItem(
     showCollection,
     showPublished,
     showDraft = true,
+    showArchivedReason,
     highlight,
     context,
     ...rest
@@ -190,6 +192,11 @@ function DocumentListItem(
                   highlight={highlight ? SEARCH_RESULT_REGEX : undefined}
                   processResult={replaceResultMarks}
                 />
+              )}
+              {showArchivedReason && document.archivedReason && (
+                <ArchivedReason title={document.archivedReason}>
+                  {document.archivedReason}
+                </ArchivedReason>
               )}
               <DocumentMeta
                 document={document}
@@ -340,6 +347,18 @@ const ResultContext = styled(Highlight)`
   margin-bottom: 0.25em;
   max-height: 90px;
   overflow: hidden;
+`;
+
+const ArchivedReason = styled.span`
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: ${s("textSecondary")};
+  font-size: 15px;
+  margin-bottom: 0.25em;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 `;
 
 export default observer(React.forwardRef(DocumentListItem));
