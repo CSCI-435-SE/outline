@@ -37,7 +37,7 @@ router.post(
   pagination(),
   validate(T.AttachmentsListSchema),
   async (ctx: APIContext<T.AttachmentsListReq>) => {
-    const { documentId, userId } = ctx.input.body;
+    const { documentId, commentId, userId } = ctx.input.body;
     const { user } = ctx.state.auth;
 
     const where: WhereOptions<Attachment> = {
@@ -51,14 +51,19 @@ router.post(
       where.userId = user.id;
     }
 
-    // If a specific document is passed then add to filters
-    if (documentId) {
-      const document = await Document.findByPk(documentId, {
-        userId: user.id,
-      });
-      authorize(user, "read", document);
-      where.documentId = documentId;
-    }
+        // If a specific document is passed then add to filters
+        if (documentId) {
+          const document = await Document.findByPk(documentId, {
+            userId: user.id,
+          });
+          authorize(user, "read", document);
+          where.documentId = documentId;
+        }
+    
+        // If a specific comment is passed then add to filters
+        if (commentId) {
+          where.commentId = commentId;
+        }
 
     const [attachments, total] = await Promise.all([
       Attachment.findAll({
@@ -87,7 +92,7 @@ router.post(
   validate(T.AttachmentsCreateSchema),
   transaction(),
   async (ctx: APIContext<T.AttachmentCreateReq>) => {
-    const { id, name, documentId, contentType, size, preset } = ctx.input.body;
+    const { id, name, documentId, commentId, contentType, size, preset } = ctx.input.body;
     const { auth, transaction } = ctx.state;
     const { user } = auth;
 
@@ -135,6 +140,7 @@ router.post(
       expiresAt: AttachmentHelper.presetToExpiry(preset),
       contentType,
       documentId,
+      commentId,
       teamId: user.teamId,
       userId: user.id,
     });

@@ -7,6 +7,8 @@ export const AttachmentsListSchema = BaseSchema.extend({
   body: z.object({
     /** Id of the document to which the Attachment belongs */
     documentId: z.uuid().optional(),
+    /** Id of the comment to which the Attachment belongs */
+    commentId: z.uuid().optional(),
     /** Id of the user that uploaded the Attachment */
     userId: z.uuid().optional(),
   }),
@@ -24,6 +26,9 @@ export const AttachmentsCreateSchema = BaseSchema.extend({
 
     /** Id of the document to which the Attachment belongs */
     documentId: z.uuid().optional(),
+
+    /** Id of the comment to which the Attachment belongs */
+    commentId: z.uuid().optional(),
 
     /** File size of the Attachment */
     size: z.number().int().nonnegative(),

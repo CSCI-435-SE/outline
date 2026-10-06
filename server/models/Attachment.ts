@@ -265,6 +265,12 @@ class Attachment extends IdModel<
   @ForeignKey(() => User)
   @Column(DataType.UUID)
   userId: string;
-}
 
+  @BelongsTo(() => require("./Comment").default, "commentId")
+  comment: any;
+
+  @ForeignKey(() => require("./Comment").default)
+  @Column(DataType.UUID)
+  commentId: string | null;
+}
 export default Attachment;
