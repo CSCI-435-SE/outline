@@ -33,6 +33,8 @@ type Props = {
   publish?: boolean;
   /** The ID of the collection to publish the document to */
   collectionId?: string | null;
+  /** An optional commit-style message describing why this change was made */
+  message?: string;
 };
 
 /**
@@ -59,6 +61,7 @@ export default async function documentUpdater(
     publish,
     collectionId,
     done,
+    message,
   }: Props
 ): Promise<Document> {
   const { user } = ctx.state.auth;
@@ -98,7 +101,13 @@ export default async function documentUpdater(
   }
 
   const changed = document.changed();
-  const eventData = done !== undefined ? { done } : undefined;
+  const eventData =
+    done !== undefined || message !== undefined
+      ? {
+          ...(done !== undefined ? { done } : undefined),
+          ...(message !== undefined ? { message } : undefined),
+        }
+      : undefined;
 
   const event = {
     name: "documents.update",

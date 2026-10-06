@@ -221,6 +221,8 @@ export type DocumentEvent = BaseEvent<Document> &
         collectionId: string;
         data?: {
           source?: "import";
+          /** An optional commit-style message describing why this change was made */
+          message?: string;
         };
       }
     | {
@@ -243,6 +245,8 @@ export type DocumentEvent = BaseEvent<Document> &
         createdAt: string;
         data?: {
           done: boolean;
+          /** An optional commit-style message describing why this change was made */
+          message?: string;
         };
       }
     | {

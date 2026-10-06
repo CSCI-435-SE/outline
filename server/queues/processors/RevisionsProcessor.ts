@@ -55,6 +55,7 @@ export default class RevisionsProcessor extends BaseProcessor {
           user,
           collaboratorIds,
           document,
+          message: event.data?.message,
         });
         break;
       }

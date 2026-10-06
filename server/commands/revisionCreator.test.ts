@@ -30,4 +30,24 @@ describe("revisionCreator", () => {
     expect(event!.modelId).toEqual(revision.id);
     expect(event!.authType).toEqual(AuthenticationType.APP);
   });
+
+  it("should record the commit message on the revision", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const revision = await revisionCreator({
+      document,
+      user,
+      collaboratorIds: [user.id],
+      message: "Fixed a typo in the intro",
+      event: {
+        name: "documents.publish",
+        authType: AuthenticationType.APP,
+      } as DocumentEvent,
+    });
+
+    expect(revision.name).toEqual("Fixed a typo in the intro");
+  });
 });

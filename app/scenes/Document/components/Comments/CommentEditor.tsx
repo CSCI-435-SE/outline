@@ -14,6 +14,7 @@ import MentionMenuExtension from "~/editor/extensions/MentionMenu";
 import PasteHandler from "~/editor/extensions/PasteHandler";
 import PreventTab from "~/editor/extensions/PreventTab";
 import SmartText from "~/editor/extensions/SmartText";
+import SubmitOnEnter from "~/editor/extensions/SubmitOnEnter";
 import UpArrowAtStart from "~/editor/extensions/UpArrowAtStart";
 import useCurrentUser from "~/hooks/useCurrentUser";
 
@@ -31,6 +32,7 @@ const extensions = [
   // Order these default key handlers last
   PreventTab,
   Keys,
+  SubmitOnEnter,
 ];
 
 type CommentEditorProps = EditorProps & {

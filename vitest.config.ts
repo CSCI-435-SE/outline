@@ -90,6 +90,10 @@ export default defineConfig({
           },
           include: ["app/**/*.test.{ts,tsx}"],
           setupFiles: ["./__mocks__/window.js", "./app/test/setup.ts"],
+          // Some dependencies (e.g. Radix) ship ESM that imports
+          // "react/jsx-runtime" without an extension, which Node cannot resolve
+          // when the dependency is externalized, so inline them for Vite.
+          server: { deps: { inline: [/@radix-ui/, /vaul/, /cmdk/] } },
         },
       },
       {
