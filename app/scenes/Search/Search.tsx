@@ -1,5 +1,6 @@
 import { observer } from "mobx-react";
 import { v4 as uuidv4 } from "uuid";
+import { addDays } from "date-fns";
 import queryString from "query-string";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
@@ -14,6 +15,7 @@ import type {
   DateFilter as TDateFilter,
 } from "@shared/types";
 import { StatusFilter as TStatusFilter } from "@shared/types";
+import { parseISODate } from "@shared/utils/date";
 import ArrowKeyNavigation from "~/components/ArrowKeyNavigation";
 import DocumentListItem from "~/components/DocumentListItem";
 import Fade from "~/components/Fade";
@@ -42,6 +44,30 @@ import UserFilter from "./components/UserFilter";
 import { HStack } from "~/components/primitives/HStack";
 import useMobile from "~/hooks/useMobile";
 
+/**
+ * Converts the date-only custom range from the query string into timestamps
+ * covering whole days in the user's local timezone.
+ *
+ * @param dateFrom the start date (yyyy-MM-dd), inclusive.
+ * @param dateTo the end date (yyyy-MM-dd), inclusive.
+ * @returns ISO timestamps for the API, or an empty object when the range is
+ * empty or invalid.
+ */
+function toDateRangeParams(dateFrom: string, dateTo: string) {
+  const from = parseISODate(dateFrom);
+  const to = parseISODate(dateTo);
+
+  if (from && to && from > to) {
+    return {};
+  }
+
+  return {
+    dateFrom: from?.toISOString(),
+    // The end date is inclusive, so filter up to the start of the next day.
+    dateTo: to ? addDays(to, 1).toISOString() : undefined,
+  };
+}
+
 function Search() {
   const { t } = useTranslation();
   const { documents, searches } = useStores();
@@ -68,6 +94,8 @@ function Search() {
   const userId = params.get("userId") ?? "";
   const documentId = params.get("documentId") ?? undefined;
   const dateFilter = (params.get("dateFilter") as TDateFilter) ?? "";
+  const dateFrom = params.get("dateFrom") ?? "";
+  const dateTo = params.get("dateTo") ?? "";
   const statusFilter = params.getAll("statusFilter")?.length
     ? (params.getAll("statusFilter") as TStatusFilter[])
     : [TStatusFilter.Published, TStatusFilter.Draft];
@@ -96,6 +124,8 @@ function Search() {
       collectionId,
       userId,
       dateFilter,
+      // A preset takes precedence, the API rejects both being set together.
+      ...(dateFilter ? {} : toDateRangeParams(dateFrom, dateTo)),
       titleFilter,
       documentId,
       sort,
@@ -107,6 +137,8 @@ function Search() {
       collectionId,
       userId,
       dateFilter,
+      dateFrom,
+      dateTo,
       titleFilter,
       documentId,
       sort,
@@ -166,6 +198,8 @@ function Search() {
     documentId?: string | undefined;
     userId?: string | undefined;
     dateFilter?: TDateFilter;
+    dateFrom?: string | undefined;
+    dateTo?: string | undefined;
     statusFilter?: TStatusFilter[];
     titleFilter?: boolean | undefined;
     sort?: string | undefined;
@@ -303,7 +337,18 @@ function Search() {
               {filterVisibility.date && (
                 <DateFilter
                   dateFilter={dateFilter}
-                  onSelect={(dateFilter) => handleFilterChange({ dateFilter })}
+                  dateFrom={dateFrom}
+                  dateTo={dateTo}
+                  onSelect={(dateFilter) =>
+                    handleFilterChange({
+                      dateFilter,
+                      dateFrom: undefined,
+                      dateTo: undefined,
+                    })
+                  }
+                  onRangeChange={(range) =>
+                    handleFilterChange({ dateFilter: undefined, ...range })
+                  }
                 />
               )}
               {filterVisibility.title && (

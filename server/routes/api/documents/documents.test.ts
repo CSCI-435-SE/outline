@@ -1389,6 +1389,35 @@ describe("#documents.search_titles", () => {
     expect(body.data.length).toEqual(0);
   });
 
+  it("should allow filtering of results by custom date range", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      title: "Super secret",
+      createdAt: new Date("2025-04-15T12:00:00.000Z"),
+      updatedAt: new Date("2025-04-15T12:00:00.000Z"),
+    });
+    await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      title: "Super secret",
+      createdAt: new Date("2025-07-01T12:00:00.000Z"),
+      updatedAt: new Date("2025-07-01T12:00:00.000Z"),
+    });
+    const res = await server.post("/api/documents.search_titles", user, {
+      body: {
+        query: "SECRET",
+        dateFrom: "2025-03-01T00:00:00.000Z",
+        dateTo: "2025-06-01T00:00:00.000Z",
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.length).toEqual(1);
+    expect(body.data[0].id).toEqual(document.id);
+  });
+
   it("should allow filtering to include archived", async () => {
     const user = await buildUser();
     const document = await buildDocument({
@@ -1921,6 +1950,141 @@ describe("#documents.search", () => {
       },
     });
     expect(res.status).toEqual(400);
+  });
+
+  describe("custom date range", () => {
+    const buildDocumentsAt = async (user: User, dates: string[]) =>
+      Promise.all(
+        dates.map((date) =>
+          buildDocument({
+            userId: user.id,
+            teamId: user.teamId,
+            title: `range test ${date}`,
+            createdAt: new Date(date),
+            updatedAt: new Date(date),
+          })
+        )
+      );
+
+    const titlesOf = (body: { data: { document: { title: string } }[] }) =>
+      body.data.map((result) => result.document.title).sort();
+
+    it("should include documents updated within the range", async () => {
+      const user = await buildUser();
+      await buildDocumentsAt(user, [
+        "2025-02-28T23:59:59.999Z",
+        "2025-03-01T00:00:00.000Z",
+        "2025-04-15T12:00:00.000Z",
+        "2025-06-01T00:00:00.000Z",
+      ]);
+      const res = await server.post("/api/documents.search", user, {
+        body: {
+          query: "range test",
+          dateFrom: "2025-03-01T00:00:00.000Z",
+          dateTo: "2025-06-01T00:00:00.000Z",
+        },
+      });
+      const body = await res.json();
+      expect(res.status).toEqual(200);
+      expect(titlesOf(body)).toEqual([
+        "range test 2025-03-01T00:00:00.000Z",
+        "range test 2025-04-15T12:00:00.000Z",
+      ]);
+    });
+
+    it("should include documents when the range is a single day", async () => {
+      const user = await buildUser();
+      await buildDocumentsAt(user, [
+        "2025-04-14T23:59:59.999Z",
+        "2025-04-15T12:00:00.000Z",
+        "2025-04-16T00:00:00.000Z",
+      ]);
+      const res = await server.post("/api/documents.search", user, {
+        body: {
+          query: "range test",
+          dateFrom: "2025-04-15T00:00:00.000Z",
+          dateTo: "2025-04-16T00:00:00.000Z",
+        },
+      });
+      const body = await res.json();
+      expect(res.status).toEqual(200);
+      expect(titlesOf(body)).toEqual(["range test 2025-04-15T12:00:00.000Z"]);
+    });
+
+    it("should allow only a start date", async () => {
+      const user = await buildUser();
+      await buildDocumentsAt(user, [
+        "2024-01-01T00:00:00.000Z",
+        "2025-03-01T00:00:00.000Z",
+      ]);
+      const res = await server.post("/api/documents.search", user, {
+        body: {
+          query: "range test",
+          dateFrom: "2025-01-01T00:00:00.000Z",
+        },
+      });
+      const body = await res.json();
+      expect(res.status).toEqual(200);
+      expect(titlesOf(body)).toEqual(["range test 2025-03-01T00:00:00.000Z"]);
+    });
+
+    it("should allow only an end date", async () => {
+      const user = await buildUser();
+      await buildDocumentsAt(user, [
+        "2024-01-01T00:00:00.000Z",
+        "2025-03-01T00:00:00.000Z",
+      ]);
+      const res = await server.post("/api/documents.search", user, {
+        body: {
+          query: "range test",
+          dateTo: "2025-01-01T00:00:00.000Z",
+        },
+      });
+      const body = await res.json();
+      expect(res.status).toEqual(200);
+      expect(titlesOf(body)).toEqual(["range test 2024-01-01T00:00:00.000Z"]);
+    });
+
+    it("should fail when dateFrom is after dateTo", async () => {
+      const user = await buildUser();
+      const res = await server.post("/api/documents.search", user, {
+        body: {
+          query: "range test",
+          dateFrom: "2025-06-01T00:00:00.000Z",
+          dateTo: "2025-03-01T00:00:00.000Z",
+        },
+      });
+      const body = await res.json();
+      expect(res.status).toEqual(400);
+      expect(body.message).toContain("dateFrom must be before dateTo");
+    });
+
+    it("should fail for an invalid date", async () => {
+      const user = await buildUser();
+      const res = await server.post("/api/documents.search", user, {
+        body: {
+          query: "range test",
+          dateFrom: "not a date",
+        },
+      });
+      expect(res.status).toEqual(400);
+    });
+
+    it("should fail when combined with dateFilter", async () => {
+      const user = await buildUser();
+      const res = await server.post("/api/documents.search", user, {
+        body: {
+          query: "range test",
+          dateFilter: "week",
+          dateFrom: "2025-03-01T00:00:00.000Z",
+        },
+      });
+      const body = await res.json();
+      expect(res.status).toEqual(400);
+      expect(body.message).toContain(
+        "dateFilter cannot be combined with dateFrom or dateTo"
+      );
+    });
   });
 
   it("should require authentication", async () => {
