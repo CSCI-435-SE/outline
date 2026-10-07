@@ -398,7 +398,9 @@ router.post(
       limit: ctx.state.pagination.limit,
     });
 
-    const data = await presentDocuments(ctx, documents);
+    const data = await presentDocuments(ctx, documents, {
+      includeAncestors: true,
+    });
     const policies = presentPolicies(user, documents);
 
     ctx.body = {

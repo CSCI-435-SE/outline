@@ -1042,6 +1042,41 @@ class Document extends ArchivableModel<
     return rows.map((row) => row.id);
   };
 
+  /**
+   * Returns the chain of ancestor documents for this document, ordered from
+   * the root-most ancestor down to the immediate parent, by walking the
+   * parentDocumentId chain directly in the database. Unlike the collection's
+   * documentStructure, archiving removes a document (and its descendants)
+   * from that structure, so this is the only reliable way to resolve a path
+   * for an archived document.
+   *
+   * @returns a promise that resolves to the ordered ancestor documents
+   */
+  findAncestorDocuments = async (): Promise<
+    Array<{ id: string; title: string }>
+  > =>
+    this.sequelize!.query<{ id: string; title: string }>(
+      `
+      WITH RECURSIVE ancestors AS (
+        SELECT documents.id, documents.title, documents."parentDocumentId", 1 AS depth
+        FROM documents
+        INNER JOIN documents AS origin ON origin."parentDocumentId" = documents.id
+        WHERE origin.id = :documentId
+          AND documents."deletedAt" IS NULL
+        UNION ALL
+        SELECT documents.id, documents.title, documents."parentDocumentId", ancestors.depth + 1
+        FROM documents
+        INNER JOIN ancestors ON documents.id = ancestors."parentDocumentId"
+        WHERE documents."deletedAt" IS NULL
+      )
+      SELECT id, title FROM ancestors ORDER BY depth DESC
+      `,
+      {
+        replacements: { documentId: this.id },
+        type: QueryTypes.SELECT,
+      }
+    );
+
   publish = async (
     ctx: APIContext,
     {

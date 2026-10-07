@@ -23,6 +23,13 @@ type Options = {
   includeCommentCount?: boolean;
   /** Array of backlink document IDs to include in the response. */
   backlinkIds?: string[];
+  /**
+   * Include the chain of ancestor documents (title and id, root to
+   * immediate parent). Used by the archive list, where documents are
+   * removed from their collection's documentStructure and so no longer
+   * expose their position via that tree.
+   */
+  includeAncestors?: boolean;
 };
 
 async function presentDocument(
@@ -115,6 +122,9 @@ async function presentDocument(
     res.popularityScore = document.popularityScore;
     if (options.includeCommentCount) {
       res.commentCount = await document.commentCount;
+    }
+    if (options.includeAncestors) {
+      res.ancestorDocuments = await document.findAncestorDocuments();
     }
     if (document.sourceMetadata) {
       const source = document.import ?? (await document.$get("import"));
