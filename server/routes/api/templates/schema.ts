@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { BaseSchema, ProsemirrorSchema } from "@server/routes/api/schema";
 import { zodIconType, zodIdType } from "@server/utils/zod";
+import { TemplateValidation } from "@shared/validations";
 import { ValidateColor } from "@server/validation";
 
 const TemplatesSortParamsSchema = z.object({
@@ -30,7 +31,7 @@ export const TemplatesListSchema = BaseSchema.extend({
     /** Id of the collection to which the template belongs */
     collectionId: z.string().uuid().optional(),
 
-    /** Search query to filter templates by title */
+    /** Search query to filter templates by title or description */
     query: z.string().optional(),
   }),
 });
@@ -40,6 +41,10 @@ export const TemplatesCreateSchema = BaseSchema.extend({
     id: z.string().uuid().optional(),
     collectionId: z.string().uuid().optional(),
     title: z.string().min(1).max(255),
+    description: z
+      .string()
+      .max(TemplateValidation.maxDescriptionLength)
+      .nullish(),
     data: ProsemirrorSchema(),
     icon: zodIconType().nullish(),
     color: z
@@ -83,6 +88,10 @@ export const TemplatesUpdateSchema = BaseSchema.extend({
   body: z.object({
     id: zodIdType(),
     title: z.string().optional(),
+    description: z
+      .string()
+      .max(TemplateValidation.maxDescriptionLength)
+      .nullish(),
     data: ProsemirrorSchema().optional(),
     icon: zodIconType().nullish(),
     color: z

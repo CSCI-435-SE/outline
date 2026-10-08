@@ -2154,6 +2154,63 @@ describe("#documents.templatize", () => {
     expect(body.data.publishedAt).toBeTruthy();
     expect(body.data.collectionId).toBeNull();
   });
+  it("should use the provided title and description", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      createdById: user.id,
+      teamId: user.teamId,
+    });
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      title: "Q3 planning",
+    });
+    const res = await server.post("/api/documents.templatize", user, {
+      body: {
+        id: document.id,
+        collectionId: collection.id,
+        publish: true,
+        title: "Quarterly planning",
+        description: "Plan goals for the next quarter",
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.data.title).toEqual("Quarterly planning");
+    expect(body.data.description).toEqual("Plan goals for the next quarter");
+    expect(body.data.isBuiltIn).toEqual(false);
+
+    // the original document is unchanged
+    await document.reload();
+    expect(document.title).toEqual("Q3 planning");
+    expect(document.template).toEqual(false);
+  });
+  it("should default the title to the document title", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      createdById: user.id,
+      teamId: user.teamId,
+    });
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      title: "Onboarding checklist",
+    });
+    const res = await server.post("/api/documents.templatize", user, {
+      body: {
+        id: document.id,
+        collectionId: collection.id,
+        publish: true,
+        title: "  ",
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.data.title).toEqual("Onboarding checklist");
+    expect(body.data.description).toBeNull();
+  });
   it("should create a draft non-workspace template", async () => {
     const user = await buildUser();
     const collection = await buildCollection({

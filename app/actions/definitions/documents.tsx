@@ -55,6 +55,7 @@ import DocumentCopy from "~/components/DocumentExplorer/DocumentCopy";
 import { DocumentDownload } from "~/components/DocumentDownload";
 import MarkdownIcon from "~/components/Icons/MarkdownIcon";
 import { getHeaderExpandedKey } from "~/components/Sidebar/components/Header";
+import { TemplateGallery } from "~/components/TemplateGallery";
 import DocumentTemplatizeDialog from "~/components/TemplatizeDialog";
 import {
   createAction,
@@ -194,6 +195,33 @@ export const createDocument = createInternalLinkAction({
       search,
       state: { sidebarContext },
     };
+  },
+});
+
+export const createDocumentFromTemplateGallery = createAction({
+  name: ({ t }) => `${t("New from template")}…`,
+  analyticsName: "New document from template gallery",
+  section: DocumentSection,
+  icon: <ShapesIcon />,
+  keywords: "create new document template gallery",
+  visible: ({ currentTeamId, activeCollectionId, stores }) => {
+    if (
+      activeCollectionId &&
+      !stores.policies.abilities(activeCollectionId).createDocument
+    ) {
+      return false;
+    }
+
+    return (
+      !!currentTeamId && stores.policies.abilities(currentTeamId).createDocument
+    );
+  },
+  perform: ({ activeCollectionId, stores, t }) => {
+    stores.dialogs.openModal({
+      title: t("Template gallery"),
+      width: "720px",
+      content: <TemplateGallery collectionId={activeCollectionId} />,
+    });
   },
 });
 
@@ -1600,6 +1628,7 @@ export const rootDocumentActions = [
   openDocument,
   archiveDocument,
   createDocument,
+  createDocumentFromTemplateGallery,
   createDraftDocument,
   createNewDocument,
   createNewDocumentInAlphabeticalCollection,
