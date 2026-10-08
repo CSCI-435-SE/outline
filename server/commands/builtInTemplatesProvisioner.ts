@@ -46,9 +46,11 @@ export default async function builtInTemplatesProvisioner({
 
   const now = new Date();
 
-  return Promise.all(
-    missing.map((builtIn) =>
-      Template.create(
+  // Created one at a time, a transaction's queries must not run in parallel.
+  const created: Template[] = [];
+  for (const builtIn of missing) {
+    created.push(
+      await Template.create(
         {
           title: builtIn.title,
           description: builtIn.description,
@@ -64,6 +66,8 @@ export default async function builtInTemplatesProvisioner({
         },
         { transaction }
       )
-    )
-  );
+    );
+  }
+
+  return created;
 }
