@@ -2406,6 +2406,83 @@ describe("#documents.archived", () => {
     const res = await server.post("/api/documents.archived");
     expect(res.status).toEqual(401);
   });
+
+  it("should include the full ancestor chain for a nested document, without a further request", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      teamId: user.teamId,
+      userId: user.id,
+    });
+    const grandparent = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      title: "Engineering",
+    });
+    const parent = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      parentDocumentId: grandparent.id,
+      title: "Backend",
+    });
+    const child = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      parentDocumentId: parent.id,
+      title: "Auth",
+    });
+    await withAPIContext(user, (ctx) => child.archiveWithCtx(ctx));
+
+    const res = await server.post("/api/documents.archived", user);
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+
+    const presented = body.data.find(
+      (doc: { id: string }) => doc.id === child.id
+    );
+    expect(presented.ancestorDocuments).toEqual([
+      { id: grandparent.id, title: "Engineering" },
+      { id: parent.id, title: "Backend" },
+    ]);
+  });
+
+  it("should keep an archived parent document in the ancestor chain", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      teamId: user.teamId,
+      userId: user.id,
+    });
+    const parent = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      title: "Backend",
+    });
+    const child = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      parentDocumentId: parent.id,
+      title: "Auth",
+    });
+
+    // Archiving the parent cascades to the child, so both end up archived.
+    await withAPIContext(user, (ctx) => parent.archiveWithCtx(ctx));
+
+    const res = await server.post("/api/documents.archived", user);
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data).toHaveLength(2);
+
+    const presented = body.data.find(
+      (doc: { id: string }) => doc.id === child.id
+    );
+    expect(presented.ancestorDocuments).toEqual([
+      { id: parent.id, title: "Backend" },
+    ]);
+  });
 });
 
 describe("#documents.deleted", () => {
@@ -3180,6 +3257,8 @@ describe("#documents.restore", () => {
     expect(res.status).toEqual(200);
     expect(body.data.parentDocumentId).toEqual(null);
     expect(body.data.archivedAt).toEqual(null);
+    // Restore is unaffected by the archive list's ancestor path feature.
+    expect(body.data.ancestorDocuments).toBeUndefined();
   });
 
   it("should restore the document to a previous version", async () => {

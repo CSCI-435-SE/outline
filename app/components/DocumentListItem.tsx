@@ -10,6 +10,7 @@ import { Link } from "react-router-dom";
 import { DocumentIcon } from "outline-icons";
 import styled, { css, useTheme } from "styled-components";
 import breakpoint from "styled-components-breakpoint";
+import type { TFunction } from "i18next";
 import EventBoundary from "@shared/components/EventBoundary";
 import Icon from "@shared/components/Icon";
 import { s, hover } from "@shared/styles";
@@ -34,6 +35,28 @@ import { useDocumentMenuAction } from "~/hooks/useDocumentMenuAction";
 import { ContextMenu } from "./Menu/ContextMenu";
 import useStores from "~/hooks/useStores";
 
+/**
+ * Returns the full nested path segments for an archived document: the
+ * collection name (or a "Deleted Collection" fallback) followed by each
+ * ancestor document's title, root to immediate parent.
+ *
+ * @param document the document to compute the path for.
+ * @param t translation function for fallback titles.
+ * @returns the ordered path segments.
+ */
+export function archivedDocumentPathSegments(
+  document: Document,
+  t: TFunction
+): string[] {
+  const collectionLabel = document.isCollectionDeleted
+    ? t("Deleted Collection")
+    : document.collection?.name;
+  const ancestorLabels = (document.ancestorDocuments ?? []).map(
+    (ancestor) => ancestor.title || t("Untitled")
+  );
+  return [...(collectionLabel ? [collectionLabel] : []), ...ancestorLabels];
+}
+
 type Props = {
   document: Document;
   highlight?: string | undefined;
@@ -42,6 +65,11 @@ type Props = {
   showCollection?: boolean;
   showPublished?: boolean;
   showDraft?: boolean;
+  /**
+   * Shows the document's full nested path (collection and ancestor
+   * documents) above the title, e.g. "Engineering / Backend / Auth".
+   */
+  showArchivedPath?: boolean;
 };
 
 const SEARCH_RESULT_REGEX = /<b\b[^>]*>(.*?)<\/b>/gi;
@@ -78,6 +106,7 @@ function DocumentListItem(
     showCollection,
     showPublished,
     showDraft = true,
+    showArchivedPath,
     highlight,
     context,
     ...rest
@@ -116,6 +145,10 @@ function DocumentListItem(
       ] as React.Ref<HTMLAnchorElement>[]),
     [itemRef, draggableRef]
   );
+
+  const pathSegments = showArchivedPath
+    ? archivedDocumentPathSegments(document, t)
+    : [];
 
   return (
     <ActionContextProvider
@@ -167,6 +200,16 @@ function DocumentListItem(
               )}
             </IconWrapper>
             <Content>
+              {pathSegments.length > 0 && (
+                <PathRow>
+                  {pathSegments.map((segment, index) => (
+                    <React.Fragment key={index}>
+                      {index > 0 && <PathSeparator>/</PathSeparator>}
+                      <span>{segment}</span>
+                    </React.Fragment>
+                  ))}
+                </PathRow>
+              )}
               <Heading dir={document.dir}>
                 <Title
                   text={document.titleWithDefault}
@@ -212,6 +255,20 @@ function DocumentListItem(
     </ActionContextProvider>
   );
 }
+
+const PathRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+  color: ${s("textTertiary")};
+  font-size: 13px;
+  margin-bottom: 2px;
+`;
+
+const PathSeparator = styled.span`
+  opacity: 0.5;
+`;
 
 const IconWrapper = styled.div`
   flex-shrink: 0;
