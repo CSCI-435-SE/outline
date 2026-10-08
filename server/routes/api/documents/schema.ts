@@ -73,7 +73,39 @@ const BaseSearchSchema = DateFilterSchema.extend({
 
   /** Max words to be accomodated in the results snippets */
   snippetMaxWords: z.number().prefault(30),
+
+  /** Only include documents updated at or after this time */
+  dateFrom: z.coerce.date().optional(),
+
+  /** Only include documents updated before this time (exclusive) */
+  dateTo: z.coerce.date().optional(),
 });
+
+/**
+ * Validates the custom date range on a search request body.
+ *
+ * @param schema the request schema to refine.
+ * @returns the schema with date range validation applied.
+ */
+const withDateRangeValidation = <
+  T extends z.ZodType<{
+    body: { dateFilter?: string; dateFrom?: Date; dateTo?: Date };
+  }>,
+>(
+  schema: T
+) =>
+  schema
+    .refine(
+      (req) =>
+        !req.body.dateFrom ||
+        !req.body.dateTo ||
+        req.body.dateFrom < req.body.dateTo,
+      { message: "dateFrom must be before dateTo" }
+    )
+    .refine(
+      (req) => !req.body.dateFilter || (!req.body.dateFrom && !req.body.dateTo),
+      { message: "dateFilter cannot be combined with dateFrom or dateTo" }
+    );
 
 const BaseIdSchema = z.object({
   /** Id of the document to be updated */
@@ -199,37 +231,45 @@ export const DocumentsRestoreSchema = BaseSchema.extend({
 
 export type DocumentsRestoreReq = z.infer<typeof DocumentsRestoreSchema>;
 
-export const DocumentsSearchSchema = BaseSchema.extend({
-  body: BaseSearchSchema.extend({
-    /** Query for search */
-    query: z.string().optional(),
+export const DocumentsSearchSchema = withDateRangeValidation(
+  BaseSchema.extend({
+    body: BaseSearchSchema.extend({
+      /** Query for search */
+      query: z.string().optional(),
 
-    /** Specifies the attributes by which search results will be sorted */
-    sort: z.enum(Object.values(SortFilter) as [string, ...string[]]).optional(),
+      /** Specifies the attributes by which search results will be sorted */
+      sort: z
+        .enum(Object.values(SortFilter) as [string, ...string[]])
+        .optional(),
 
-    /** Specifies the sort order with respect to sort field */
-    direction: z
-      .enum(Object.values(DirectionFilter) as [string, ...string[]])
-      .optional(),
-  }),
-});
+      /** Specifies the sort order with respect to sort field */
+      direction: z
+        .enum(Object.values(DirectionFilter) as [string, ...string[]])
+        .optional(),
+    }),
+  })
+);
 
 export type DocumentsSearchReq = z.infer<typeof DocumentsSearchSchema>;
 
-export const DocumentsSearchTitlesSchema = BaseSchema.extend({
-  body: BaseSearchSchema.extend({
-    /** Query for search */
-    query: z.string().refine((val) => val.trim() !== ""),
+export const DocumentsSearchTitlesSchema = withDateRangeValidation(
+  BaseSchema.extend({
+    body: BaseSearchSchema.extend({
+      /** Query for search */
+      query: z.string().refine((val) => val.trim() !== ""),
 
-    /** Specifies the attributes by which search results will be sorted */
-    sort: z.enum(Object.values(SortFilter) as [string, ...string[]]).optional(),
+      /** Specifies the attributes by which search results will be sorted */
+      sort: z
+        .enum(Object.values(SortFilter) as [string, ...string[]])
+        .optional(),
 
-    /** Specifies the sort order with respect to sort field */
-    direction: z
-      .enum(Object.values(DirectionFilter) as [string, ...string[]])
-      .optional(),
-  }),
-});
+      /** Specifies the sort order with respect to sort field */
+      direction: z
+        .enum(Object.values(DirectionFilter) as [string, ...string[]])
+        .optional(),
+    }),
+  })
+);
 
 export type DocumentsSearchTitlesReq = z.infer<
   typeof DocumentsSearchTitlesSchema

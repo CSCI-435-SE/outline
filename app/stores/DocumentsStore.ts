@@ -34,6 +34,10 @@ export type SearchParams = {
   offset?: number;
   limit?: number;
   dateFilter?: DateFilter;
+  /** ISO timestamp, documents updated at or after this time */
+  dateFrom?: string;
+  /** ISO timestamp, documents updated before this time */
+  dateTo?: string;
   statusFilter?: StatusFilter[];
   collectionId?: string;
   userId?: string;
