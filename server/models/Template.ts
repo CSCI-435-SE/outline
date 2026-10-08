@@ -124,6 +124,13 @@ class Template extends ParanoidModel<
   @Column(DataType.BOOLEAN)
   isBuiltIn: boolean;
 
+  /**
+   * A stable identifier for the built-in template this was seeded from, kept
+   * when the template is renamed so it is not seeded again.
+   */
+  @Column(DataType.STRING)
+  builtInKey: string | null;
+
   @Default(false)
   @Column(DataType.BOOLEAN)
   fullWidth: boolean;

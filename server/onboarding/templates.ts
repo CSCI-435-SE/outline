@@ -1,5 +1,7 @@
 export interface BuiltInTemplate {
-  /** The title of the template, also used to identify it when seeding. */
+  /** A stable identifier used to detect templates that were already seeded. */
+  key: string;
+  /** The title of the template. */
   title: string;
   /** A short summary shown in the template gallery. */
   description: string;
@@ -15,6 +17,7 @@ export interface BuiltInTemplate {
  */
 export const builtInTemplates: BuiltInTemplate[] = [
   {
+    key: "meeting-notes",
     title: "Meeting notes",
     description:
       "Capture the agenda, discussion, decisions and action items from a meeting.",
@@ -41,6 +44,7 @@ export const builtInTemplates: BuiltInTemplate[] = [
 `,
   },
   {
+    key: "project-brief",
     title: "Project brief",
     description:
       "Outline the problem, goals, scope and timeline before a project kicks off.",
@@ -76,6 +80,7 @@ What problem are we solving, and for whom?
 `,
   },
   {
+    key: "retrospective",
     title: "Retrospective",
     description:
       "Reflect on what went well, what didn't, and what the team will change next time.",
@@ -101,6 +106,7 @@ What problem are we solving, and for whom?
 `,
   },
   {
+    key: "bug-report",
     title: "Bug report",
     description:
       "Describe a defect with reproduction steps, expected behavior and impact.",
@@ -132,6 +138,7 @@ What problem are we solving, and for whom?
 `,
   },
   {
+    key: "decision-record",
     title: "Decision record",
     description:
       "Document an important decision, the options considered and why it was made.",

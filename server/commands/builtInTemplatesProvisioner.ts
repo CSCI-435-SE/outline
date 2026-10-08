@@ -15,7 +15,8 @@ interface Props {
 /**
  * Seeds the built-in templates into the user's workspace as workspace
  * templates. Templates that were previously seeded are skipped, including ones
- * that have since been deleted, so the command is safe to run more than once.
+ * that have since been renamed or deleted, so the command is safe to run more
+ * than once.
  *
  * @param props The properties of the provisioner.
  * @returns The templates that were created.
@@ -24,20 +25,21 @@ export default async function builtInTemplatesProvisioner({
   user,
   transaction,
 }: Props): Promise<Template[]> {
+  // Match on the stable key rather than the title so that templates renamed
+  // by an admin are not seeded again.
   const existing = await Template.unscoped().findAll({
-    attributes: ["title"],
+    attributes: ["builtInKey"],
     where: {
       teamId: user.teamId,
       template: true,
-      isBuiltIn: true,
-      title: { [Op.in]: builtInTemplates.map((t) => t.title) },
+      builtInKey: { [Op.in]: builtInTemplates.map((t) => t.key) },
     },
     paranoid: false,
     transaction,
   });
-  const existingTitles = new Set(existing.map((t) => t.title));
+  const existingKeys = new Set(existing.map((t) => t.builtInKey));
 
-  const missing = builtInTemplates.filter((t) => !existingTitles.has(t.title));
+  const missing = builtInTemplates.filter((t) => !existingKeys.has(t.key));
   if (!missing.length) {
     return [];
   }
@@ -53,6 +55,7 @@ export default async function builtInTemplatesProvisioner({
           icon: builtIn.icon,
           content: ProsemirrorHelper.toProsemirror(builtIn.text).toJSON(),
           isBuiltIn: true,
+          builtInKey: builtIn.key,
           teamId: user.teamId,
           collectionId: null,
           createdById: user.id,

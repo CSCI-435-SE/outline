@@ -38,6 +38,30 @@ describe("builtInTemplatesProvisioner", () => {
     );
   });
 
+  it("should not recreate built-in templates that were renamed", async () => {
+    const user = await buildAdmin();
+
+    const [first] = await builtInTemplatesProvisioner({ user });
+    await first.update({ title: "Standup notes" });
+
+    const created = await builtInTemplatesProvisioner({ user });
+
+    expect(created).toHaveLength(0);
+    expect(await Template.count({ where: { teamId: user.teamId } })).toEqual(
+      builtInTemplates.length
+    );
+  });
+
+  it("should store a unique key on each seeded template", async () => {
+    const user = await buildAdmin();
+
+    const created = await builtInTemplatesProvisioner({ user });
+
+    expect(new Set(created.map((t) => t.builtInKey))).toEqual(
+      new Set(builtInTemplates.map((t) => t.key))
+    );
+  });
+
   it("should not recreate built-in templates that were deleted", async () => {
     const user = await buildAdmin();
 
