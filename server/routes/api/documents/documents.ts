@@ -1203,7 +1203,7 @@ router.post(
   validate(T.DocumentsTemplatizeSchema),
   transaction(),
   async (ctx: APIContext<T.DocumentsTemplatizeReq>) => {
-    const { id, collectionId, publish } = ctx.input.body;
+    const { id, collectionId, publish, title, description } = ctx.input.body;
     const { user } = ctx.state.auth;
     const { transaction } = ctx.state;
 
@@ -1233,7 +1233,8 @@ router.post(
       createdById: user.id,
       icon: original.icon,
       color: original.color,
-      title: original.title,
+      title: title?.trim() || original.title,
+      description: description?.trim() || null,
       content: original.content,
     });
 

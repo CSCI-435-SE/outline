@@ -79,6 +79,36 @@ describe("#templates.list", () => {
     expect(body.pagination.total).toEqual(1);
   });
 
+  it("should filter templates by description", async () => {
+    const user = await buildUser();
+    const template = await buildTemplate({
+      userId: user.id,
+      teamId: user.teamId,
+      title: "Weekly sync",
+      description: "Capture decisions and action items",
+    });
+    await buildTemplate({
+      userId: user.id,
+      teamId: user.teamId,
+      title: "Project plan",
+    });
+
+    const res = await server.post("/api/templates.list", user, {
+      body: {
+        query: "decisions",
+      },
+    });
+
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.length).toEqual(1);
+    expect(body.data[0].id).toEqual(template.id);
+    expect(body.data[0].description).toEqual(
+      "Capture decisions and action items"
+    );
+    expect(body.data[0].isBuiltIn).toEqual(false);
+  });
+
   it("should require authentication", async () => {
     const res = await server.post("/api/templates.list");
     expect(res.status).toEqual(401);

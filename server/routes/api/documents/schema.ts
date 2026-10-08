@@ -8,7 +8,11 @@ import {
   TextEditMode,
   SortFilter,
 } from "@shared/types";
-import { RevisionValidation } from "@shared/validations";
+import {
+  DocumentValidation,
+  RevisionValidation,
+  TemplateValidation,
+} from "@shared/validations";
 import { BaseSchema } from "@server/routes/api/schema";
 import { zodIconType, zodIdType, zodShareIdType } from "@server/utils/zod";
 import { ValidateColor } from "@server/validation";
@@ -254,6 +258,13 @@ export const DocumentsTemplatizeSchema = BaseSchema.extend({
     collectionId: z.string().nullish(),
     /** Whether the new template should be published */
     publish: z.boolean(),
+    /** Title of the new template, defaults to the document title */
+    title: z.string().max(DocumentValidation.maxTitleLength).optional(),
+    /** Short description of the new template */
+    description: z
+      .string()
+      .max(TemplateValidation.maxDescriptionLength)
+      .nullish(),
   }),
 });
 

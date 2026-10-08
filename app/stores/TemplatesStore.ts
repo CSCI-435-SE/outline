@@ -45,15 +45,21 @@ export default class TemplatesStore extends Store<Template> {
     id,
     collectionId,
     publish,
+    title,
+    description,
   }: {
     id: string;
     collectionId: string | null;
     publish: boolean;
+    title?: string;
+    description?: string | null;
   }): Promise<Template | undefined> => {
     const res = await client.post("/documents.templatize", {
       id,
       collectionId,
       publish,
+      title,
+      description,
     });
     invariant(res?.data, "Data should be available");
 

@@ -23,8 +23,8 @@ export default class Template extends ParanoidModel implements Searchable {
   data: ProsemirrorData;
 
   @computed
-  get searchContent(): string {
-    return this.title;
+  get searchContent(): string[] {
+    return [this.title, this.description ?? ""];
   }
 
   @computed
@@ -51,6 +51,20 @@ export default class Template extends ParanoidModel implements Searchable {
   @Field
   @observable
   title: string;
+
+  /**
+   * A short summary of what the template is for, shown in the template gallery.
+   */
+  @Field
+  @observable
+  description?: string | null;
+
+  /**
+   * Whether the template was provided by the application rather than created
+   * by a member.
+   */
+  @observable
+  isBuiltIn: boolean;
 
   /**
    * An icon (or) emoji to use as the template icon.
@@ -88,6 +102,12 @@ export default class Template extends ParanoidModel implements Searchable {
 
   @observable
   urlId: string;
+
+  /**
+   * The date the template was published, unpublished templates are drafts.
+   */
+  @observable
+  publishedAt: string | null;
 
   /**
    * Returns the direction of the template text, either "rtl" or "ltr"
