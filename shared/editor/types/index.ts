@@ -51,6 +51,8 @@ export type MenuItem = {
   skipIcon?: boolean;
   disabled?: boolean;
   onClick?: () => void;
+  /** Placeholder for the input shown when the item asks for a link */
+  placeholder?: string;
   /** Custom React content to render instead of a standard menu item */
   content?: React.ReactNode;
   /** Condition to check before preventing the submenu from closing */

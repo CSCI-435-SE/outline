@@ -8,6 +8,10 @@ import { Trans, useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import styled, { keyframes } from "styled-components";
 import insertFiles from "@shared/editor/commands/insertFiles";
+import {
+  DEFAULT_SLIDESHOW_INTERVAL,
+  parseSlideshowUrls,
+} from "@shared/editor/lib/slideshow";
 import { EmbedDescriptor } from "@shared/editor/embeds";
 import filterExcessSeparators from "@shared/editor/lib/filterExcessSeparators";
 import { findParentNode } from "@shared/editor/queries/findParentNode";
@@ -378,6 +382,7 @@ function SuggestionsMenu<T extends MenuItem>(props: Props<T>) {
         case "attachment":
           return triggerFilePick(item.attrs?.accept ?? "*", item.attrs);
         case "embed":
+        case "slideshow":
           return triggerLinkInput(item);
         default:
           insertNode(item);
@@ -401,6 +406,13 @@ function SuggestionsMenu<T extends MenuItem>(props: Props<T>) {
       return;
     }
     if (!insertItem) {
+      return;
+    }
+
+    if (event.key === "Enter" && insertItem.name === "slideshow") {
+      event.preventDefault();
+      event.stopPropagation();
+      insertSlideshow(event.currentTarget.value);
       return;
     }
 
@@ -430,6 +442,19 @@ function SuggestionsMenu<T extends MenuItem>(props: Props<T>) {
     }
   };
 
+  const insertSlideshow = (value: string) => {
+    const images = parseSlideshowUrls(value);
+    if (!images.length) {
+      toast.error(t("Paste at least one valid image link"));
+      return;
+    }
+
+    restoreSelection();
+    handleClearSearch();
+    commands.slideshow({ images, interval: DEFAULT_SLIDESHOW_INTERVAL });
+    props.onClose();
+  };
+
   const handleLinkInputPaste = (
     event: React.ClipboardEvent<HTMLInputElement>
   ) => {
@@ -437,6 +462,11 @@ function SuggestionsMenu<T extends MenuItem>(props: Props<T>) {
       return;
     }
     if (!insertItem) {
+      return;
+    }
+    // Slideshows accept several links, so wait for Enter instead of
+    // inserting on paste.
+    if (insertItem.name === "slideshow") {
       return;
     }
 
