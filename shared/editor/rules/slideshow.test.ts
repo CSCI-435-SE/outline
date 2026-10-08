@@ -100,6 +100,44 @@ After`;
     expect(parser.parse(output)?.toJSON()).toEqual(doc?.toJSON());
   });
 
+  it("round-trips a slideshow in a list inside a notice", () => {
+    const slideshow = schema.nodes.slideshow.create({
+      images: ["https://example.com/a.png", "https://example.com/b.png"],
+      interval: 3000,
+    });
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.container_notice.create({ style: "info" }, [
+        schema.nodes.bullet_list.create(null, [
+          schema.nodes.list_item.create(null, [
+            schema.nodes.paragraph.create(null, schema.text("Photos")),
+            slideshow,
+          ]),
+        ]),
+      ]),
+      schema.nodes.paragraph.create(null, schema.text("After the notice")),
+    ]);
+
+    const markdown = serializer.serialize(doc);
+    const parsed = parser.parse(markdown);
+
+    expect(markdown).toContain("::::info");
+    expect(parsed?.toJSON()).toEqual(doc.toJSON());
+    expect(findNodes(parsed?.toJSON(), "container_notice")).toHaveLength(1);
+  });
+
+  it("keeps the standard marker for notices without nested blocks", () => {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.container_notice.create({ style: "info" }, [
+        schema.nodes.paragraph.create(null, schema.text("Hello")),
+      ]),
+    ]);
+
+    expect(serializer.serialize(doc).trim()).toBe(`:::info
+Hello
+
+:::`);
+  });
+
   it("does not affect notices", () => {
     const json = parse(`:::info
 Hello
