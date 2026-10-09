@@ -114,6 +114,13 @@ export default function blockMenuItems(
       keywords: "picture photo",
     },
     {
+      name: "slideshow",
+      title: t("Slideshow"),
+      icon: <ImageIcon />,
+      keywords: "carousel gallery images photos slides",
+      placeholder: `${t("Paste image links, separated by spaces")}…`,
+    },
+    {
       name: "video",
       title: t("Video"),
       icon: <EmbedIcon />,

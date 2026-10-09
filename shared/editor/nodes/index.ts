@@ -37,6 +37,7 @@ import Notice from "./Notice";
 import OrderedList from "./OrderedList";
 import Paragraph from "./Paragraph";
 import SimpleImage from "./SimpleImage";
+import Slideshow from "./Slideshow";
 import Table from "./Table";
 import TableCell from "./TableCell";
 import TableHeader from "./TableHeader";
@@ -110,6 +111,7 @@ export const richExtensions: Nodes = [
   Embed,
   Attachment,
   Video,
+  Slideshow,
   Notice,
   Heading,
   HorizontalRule,

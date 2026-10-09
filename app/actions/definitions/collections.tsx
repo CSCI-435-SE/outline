@@ -41,6 +41,7 @@ import {
   searchPath,
 } from "~/utils/routeHelpers";
 import ExportDialog from "~/components/ExportDialog";
+import { TemplateGallery } from "~/components/TemplateGallery";
 import { getEventFiles } from "@shared/utils/files";
 import history from "~/utils/history";
 import lazyWithRetry from "~/utils/lazyWithRetry";
@@ -518,6 +519,26 @@ export const createDocument = createInternalLinkAction({
       search,
       state: { sidebarContext },
     };
+  },
+});
+
+export const createDocumentFromTemplateGallery = createAction({
+  name: ({ t }) => `${t("New from template")}…`,
+  analyticsName: "New document from template gallery",
+  section: ActiveCollectionSection,
+  icon: <ShapesIcon />,
+  keywords: "new create document template gallery",
+  visible: ({ getActivePolicies }) =>
+    getActivePolicies(Collection).some(
+      (policy) => policy.abilities.createDocument
+    ),
+  perform: ({ getActiveModel, stores, t }) => {
+    const collection = getActiveModel(Collection);
+    stores.dialogs.openModal({
+      title: t("Template gallery"),
+      width: "720px",
+      content: <TemplateGallery collectionId={collection?.id} />,
+    });
   },
 });
 

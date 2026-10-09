@@ -32,6 +32,8 @@ type SaveOptions = JSONObject & {
   publish?: boolean;
   done?: boolean;
   autosave?: boolean;
+  /** An optional commit-style message describing why this change was made, recorded on the resulting revision */
+  message?: string;
 };
 
 export default class Document extends ArchivableModel implements Searchable {
@@ -59,6 +61,12 @@ export default class Document extends ArchivableModel implements Searchable {
   @observable
   lastViewedAt: string | undefined;
 
+  /**
+   * An optional explanation left by the user who archived the document.
+   */
+  @observable
+  archivedReason: string | null;
+
   store: DocumentsStore;
 
   @observable.shallow
@@ -80,6 +88,13 @@ export default class Document extends ArchivableModel implements Searchable {
     /** The name of the file this document was imported from. */
     fileName?: string;
   };
+
+  /**
+   * The chain of ancestor documents (root to immediate parent), only
+   * present when fetched via the archived documents list.
+   */
+  @observable
+  ancestorDocuments?: { id: string; title: string }[];
 
   @computed
   get searchContent(): string {
@@ -459,7 +474,7 @@ export default class Document extends ArchivableModel implements Searchable {
     }
   }
 
-  archive = () => this.store.archive(this);
+  archive = (reason?: string) => this.store.archive(this, reason);
 
   restore = (options?: { revisionId?: string; collectionId?: string }) =>
     this.store.restore(this, options);

@@ -14,6 +14,7 @@ import type GroupMembership from "~/models/GroupMembership";
 import type Star from "~/models/Star";
 import UserMembership from "~/models/UserMembership";
 import ConfirmMoveDialog from "~/components/ConfirmMoveDialog";
+import DocumentArchiveDialog from "~/components/DocumentArchiveDialog";
 import useCurrentUser from "~/hooks/useCurrentUser";
 import usePolicy from "~/hooks/usePolicy";
 import useStores from "~/hooks/useStores";
@@ -561,7 +562,7 @@ export function useDropToReorderUserMembership(getIndex?: () => string) {
  */
 export function useDropToArchive() {
   const accept = ["document", "collection"];
-  const { documents, collections, policies } = useStores();
+  const { documents, collections, policies, dialogs } = useStores();
   const { t } = useTranslation();
 
   return useDrop<
@@ -572,21 +573,23 @@ export function useDropToArchive() {
     accept,
     drop: async (item, monitor) => {
       const type = monitor.getItemType();
-      let model;
 
       if (type === "collection") {
-        model = collections.get(item.id);
-      } else {
-        model = documents.get(item.id);
+        const collection = collections.get(item.id);
+        if (collection) {
+          await collection.archive();
+          toast.success(t("Collection archived"));
+        }
+        return;
       }
 
-      if (model) {
-        await model.archive();
-        toast.success(
-          type === "collection"
-            ? t("Collection archived")
-            : t("Document archived")
-        );
+      // Documents go through the archive dialog so a reason can be left
+      const document = documents.get(item.id);
+      if (document) {
+        dialogs.openModal({
+          title: t("Are you sure you want to archive this document?"),
+          content: <DocumentArchiveDialog document={document} />,
+        });
       }
     },
     canDrop: (item) => policies.abilities(item.id).archive,

@@ -9,11 +9,14 @@ export default async function revisionCreator({
   document,
   collaboratorIds,
   user,
+  message,
 }: {
   event: DocumentEvent | RevisionEvent;
   document: Document;
   collaboratorIds: string[];
   user: User;
+  /** An optional commit-style message describing why this change was made */
+  message?: string;
 }) {
   return sequelize.transaction(
     async (transaction) =>
@@ -25,7 +28,8 @@ export default async function revisionCreator({
           transaction,
         }),
         document,
-        collaboratorIds
+        collaboratorIds,
+        message
       )
   );
 }

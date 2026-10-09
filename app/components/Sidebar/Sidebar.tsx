@@ -2,6 +2,7 @@ import { observer } from "mobx-react";
 import * as React from "react";
 import { mergeRefs } from "react-merge-refs";
 import { useLocation } from "react-router-dom";
+import type { DefaultTheme } from "styled-components";
 import styled, { css, useTheme } from "styled-components";
 import breakpoint from "styled-components-breakpoint";
 import { depths, s } from "@shared/styles";
@@ -14,7 +15,6 @@ import useStores from "~/hooks/useStores";
 import AccountMenu from "~/menus/AccountMenu";
 import { fadeOnDesktopBackgrounded } from "~/styles";
 import { fadeIn } from "~/styles/animations";
-import Desktop from "~/utils/Desktop";
 import NotificationIcon from "../Notifications/NotificationIcon";
 import NotificationsPopover from "../Notifications/NotificationsPopover";
 import { TooltipProvider } from "../TooltipContext";
@@ -415,17 +415,42 @@ const Container = styled(Flex)<ContainerProps>`
       box-shadow 150ms ease-in-out,
       transform 150ms ease-out${(props: ContainerProps) =>
         props.$isAnimating ? `, width ${ANIMATION_MS}ms ease-out` : ""};
-    transform: translateX(${(props: ContainerProps) =>
+    transform: translateX(${(props: ContainerProps & { theme: DefaultTheme }) =>
       props.$collapsed
-        ? `calc(-100% + ${Desktop.hasInsetTitlebar() ? 8 : 16}px)`
+        ? `calc(-100% + ${props.theme.sidebarCollapsedWidth}px)`
         : 0});
 
     [dir="rtl"] & {
-      transform: translateX(${(props: ContainerProps) =>
-        props.$collapsed ? `calc(100% - 8px)` : 0});
+      transform: translateX(${(
+        props: ContainerProps & { theme: DefaultTheme }
+      ) =>
+        props.$collapsed
+          ? `calc(100% - ${props.theme.sidebarCollapsedWidth}px)`
+          : 0});
     }
 
     ${(props: ContainerProps) => props.$isHovering && css(hoverStyles)}
+
+    ${(props: ContainerProps) =>
+      // Keep the toggle button visible in the collapsed strip as a hint that
+      // the sidebar can be revealed, while the rest of its row fades out.
+      props.$collapsed &&
+      !props.$isHovering &&
+      !props.$hidden &&
+      css`
+        &:not(:focus-within) > div:has(${ToggleButton}) {
+          opacity: 1;
+
+          & > :not(:has(${ToggleButton})) {
+            opacity: 0;
+            transition: opacity 150ms ease-in-out;
+          }
+
+          ${ToggleButton} {
+            opacity: 1;
+          }
+        }
+      `}
 
     &:hover {
       ${ToggleButton} {

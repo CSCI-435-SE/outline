@@ -50,11 +50,12 @@ import { ProsemirrorHelper } from "~/models/helpers/ProsemirrorHelper";
 import DocumentPermanentDelete from "~/scenes/DocumentPermanentDelete";
 import DocumentPublish from "~/scenes/DocumentPublish";
 import DeleteDocumentsInTrash from "~/scenes/Trash/components/DeleteDocumentsInTrash";
-import ConfirmationDialog from "~/components/ConfirmationDialog";
+import DocumentArchiveDialog from "~/components/DocumentArchiveDialog";
 import DocumentCopy from "~/components/DocumentExplorer/DocumentCopy";
 import { DocumentDownload } from "~/components/DocumentDownload";
 import MarkdownIcon from "~/components/Icons/MarkdownIcon";
 import { getHeaderExpandedKey } from "~/components/Sidebar/components/Header";
+import { TemplateGallery } from "~/components/TemplateGallery";
 import DocumentTemplatizeDialog from "~/components/TemplatizeDialog";
 import {
   createAction,
@@ -194,6 +195,33 @@ export const createDocument = createInternalLinkAction({
       search,
       state: { sidebarContext },
     };
+  },
+});
+
+export const createDocumentFromTemplateGallery = createAction({
+  name: ({ t }) => `${t("New from template")}…`,
+  analyticsName: "New document from template gallery",
+  section: DocumentSection,
+  icon: <ShapesIcon />,
+  keywords: "create new document template gallery",
+  visible: ({ currentTeamId, activeCollectionId, stores }) => {
+    if (
+      activeCollectionId &&
+      !stores.policies.abilities(activeCollectionId).createDocument
+    ) {
+      return false;
+    }
+
+    return (
+      !!currentTeamId && stores.policies.abilities(currentTeamId).createDocument
+    );
+  },
+  perform: ({ activeCollectionId, stores, t }) => {
+    stores.dialogs.openModal({
+      title: t("Template gallery"),
+      width: "720px",
+      content: <TemplateGallery collectionId={activeCollectionId} />,
+    });
   },
 });
 
@@ -434,6 +462,7 @@ export const starDocument = createAction({
   section: ActiveDocumentSection,
   icon: <StarredIcon />,
   keywords: "favorite bookmark",
+  shortcut: ["Control+Alt+KeyS"],
   visible: ({ activeDocumentId, stores }) => {
     if (!activeDocumentId) {
       return false;
@@ -460,6 +489,7 @@ export const unstarDocument = createAction({
   section: ActiveDocumentSection,
   icon: <UnstarredIcon />,
   keywords: "unfavorite unbookmark",
+  shortcut: ["Control+Alt+KeyS"],
   visible: ({ activeDocumentId, stores }) => {
     if (!activeDocumentId) {
       return false;
@@ -500,25 +530,14 @@ export const publishDocument = createAction({
     }
 
     const document = stores.documents.get(activeDocumentId);
-    if (document?.publishedAt) {
+    if (!document || document.publishedAt) {
       return;
     }
 
-    if (document?.collectionId) {
-      await document.save(undefined, {
-        publish: true,
-      });
-      toast.success(
-        t("Published {{ documentName }}", {
-          documentName: document.noun,
-        })
-      );
-    } else if (document) {
-      stores.dialogs.openModal({
-        title: t("Publish document"),
-        content: <DocumentPublish document={document} />,
-      });
-    }
+    stores.dialogs.openModal({
+      title: t("Publish document"),
+      content: <DocumentPublish document={document} />,
+    });
   },
 });
 
@@ -1265,19 +1284,7 @@ export const archiveDocument = createAction({
 
       dialogs.openModal({
         title: t("Are you sure you want to archive this document?"),
-        content: (
-          <ConfirmationDialog
-            onSubmit={async () => {
-              await document.archive();
-              toast.success(t("Document archived"));
-            }}
-            savingText={`${t("Archiving")}…`}
-          >
-            {t(
-              "Archiving this document will remove it from the collection and search results."
-            )}
-          </ConfirmationDialog>
-        ),
+        content: <DocumentArchiveDialog document={document} />,
       });
     }
   },
@@ -1609,6 +1616,7 @@ export const rootDocumentActions = [
   openDocument,
   archiveDocument,
   createDocument,
+  createDocumentFromTemplateGallery,
   createDraftDocument,
   createNewDocument,
   createNewDocumentInAlphabeticalCollection,

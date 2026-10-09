@@ -25,7 +25,7 @@ import {
 import slugify from "slugify";
 import type { ProsemirrorData } from "@shared/types";
 import { UrlHelper } from "@shared/utils/UrlHelper";
-import { DocumentValidation } from "@shared/validations";
+import { DocumentValidation, TemplateValidation } from "@shared/validations";
 import { generateUrlId } from "@server/utils/url";
 import Collection from "./Collection";
 import Revision from "./Revision";
@@ -110,6 +110,26 @@ class Template extends ParanoidModel<
   })
   @Column(DataType.STRING)
   title: string;
+
+  /** A short summary of what the template is for, shown in the template gallery. */
+  @Length({
+    max: TemplateValidation.maxDescriptionLength,
+    msg: `Template description must be ${TemplateValidation.maxDescriptionLength} characters or less`,
+  })
+  @Column(DataType.TEXT)
+  description: string | null;
+
+  /** Whether the template was provided by the application rather than created by a member. */
+  @Default(false)
+  @Column(DataType.BOOLEAN)
+  isBuiltIn: boolean;
+
+  /**
+   * A stable identifier for the built-in template this was seeded from, kept
+   * when the template is renamed so it is not seeded again.
+   */
+  @Column(DataType.STRING)
+  builtInKey: string | null;
 
   @Default(false)
   @Column(DataType.BOOLEAN)

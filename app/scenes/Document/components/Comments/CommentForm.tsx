@@ -12,7 +12,7 @@ import { parseReactionShorthand } from "@shared/editor/lib/emoji";
 import type { ProsemirrorData } from "@shared/types";
 import { AttachmentPreset } from "@shared/types";
 import { getEventFiles } from "@shared/utils/files";
-import { AttachmentValidation, CommentValidation } from "@shared/validations";
+import { CommentValidation } from "@shared/validations";
 import Comment from "~/models/Comment";
 import { Avatar } from "~/components/Avatar";
 import ButtonSmall from "~/components/ButtonSmall";
@@ -115,16 +115,34 @@ function CommentForm({
     return () => window.removeEventListener("beforeunload", reset);
   }, [reset]);
 
-  const handleCreateComment = async (event: React.FormEvent) => {
+  const handleUploadFile = React.useCallback(
+    async (
+      f: File | string,
+      uploadOptions?: {
+        id?: string;
+        onProgress?: (fractionComplete: number) => void;
+      }
+    ) => {
+      const result = await uploadFile(f instanceof File ? f : new File([], f), {
+        id: uploadOptions?.id,
+        documentId,
+        preset: AttachmentPreset.DocumentAttachment,
+        onProgress: uploadOptions?.onProgress,
+      });
+      return result.url;
+    },
+    [documentId]
+  );
+
+  const handleCreateComment = action(async (event: React.FormEvent) => {
     event.preventDefault();
     if (!draft && attachedFiles.length === 0) return;
 
     const filesToUpload = [...attachedFiles];
-
+    setAttachedFiles([]);
     onSaveDraft(undefined);
     setForceRender((s) => ++s);
     setInputFocused(false);
-    setAttachedFiles([]);
 
     const commentDraft = draft;
     const comment =
@@ -144,22 +162,8 @@ function CommentForm({
         documentId,
         data: draft ?? { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "\u200B" }] }] },
       })
-      .then(async (savedComment) => {
-        for (const f of filesToUpload) {
-          try {
-            await uploadFile(f, {
-              preset: AttachmentPreset.DocumentAttachment,
-              documentId,
-              commentId: savedComment.id,
-            });
-          } catch {
-            toast.error(t("Error uploading file"));
-          }
-        }
-        onSubmit?.();
-      })
-      .catch((err) => {
-        console.log("comment save error:", err);
+      .then(() => onSubmit?.())
+      .catch(() => {
         onSaveDraft(commentDraft);
         setForceRender((s) => ++s);
         setAttachedFiles(filesToUpload);
@@ -167,21 +171,20 @@ function CommentForm({
         toast.error(t("Error creating comment"));
       });
 
-    action(() => {
-      if (draft) {
-        comment.data = draft;
-      }
-      comment.isNew = false;
-      comment.createdById = user.id;
-      comment.createdBy = user;
-    })();
-  };
+    if (draft) {
+      comment.data = draft;
+    }
+    comment.isNew = false;
+    comment.createdById = user.id;
+    comment.createdBy = user;
+  });
 
-  const handleCreateReply = async (event: React.FormEvent) => {
+  const handleCreateReply = action(async (event: React.FormEvent) => {
     event.preventDefault();
     if (!draft && attachedFiles.length === 0) return;
 
     const filesToUpload = [...attachedFiles];
+    setAttachedFiles([]);
 
     // "+:emoji:" shorthand: react to the comment above instead of replying.
     if (draft && thread && !thread.isNew) {
@@ -208,7 +211,6 @@ function CommentForm({
     const commentDraft = draft;
     onSaveDraft(undefined);
     setForceRender((s) => ++s);
-    setAttachedFiles([]);
 
     const comment = new Comment(
       {
@@ -232,22 +234,8 @@ function CommentForm({
         documentId,
         data: draft ?? { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "\u200B" }] }] },
       })
-      .then(async (savedComment) => {
-        for (const f of filesToUpload) {
-          try {
-            await uploadFile(f, {
-              preset: AttachmentPreset.DocumentAttachment,
-              documentId,
-              commentId: savedComment.id,
-            });
-          } catch {
-            toast.error(t("Error uploading file"));
-          }
-        }
-        onSubmit?.();
-      })
-      .catch((err) => {
-        console.log("comment save error:", err);
+      .then(() => onSubmit?.())
+      .catch(() => {
         onSaveDraft(commentDraft);
         setForceRender((s) => ++s);
         setAttachedFiles(filesToUpload);
@@ -256,16 +244,14 @@ function CommentForm({
         toast.error(t("Error creating comment"));
       });
 
-    action(() => {
-      comment.isNew = false;
-      comment.createdById = user.id;
-      comment.createdBy = user;
-    })();
+    comment.isNew = false;
+    comment.createdById = user.id;
+    comment.createdBy = user;
 
     setTimeout(() => {
       editorRef.current?.focusAtStart();
     }, 0);
-  };
+  });
 
   const handleChange = (
     value: (asString: boolean, trim: boolean) => ProsemirrorData
@@ -312,6 +298,10 @@ function CommentForm({
       return;
     }
 
+    // Use insertFiles to handle the upload through the editor
+    void editorRef.current?.insertFiles(event, files);
+
+    // Also track in state for display
     setAttachedFiles((prev) => [...prev, ...files]);
     setInputFocused(true);
 
@@ -324,7 +314,7 @@ function CommentForm({
     setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleImageUpload = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleAttachClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     event.preventDefault();
     file.current?.click();
@@ -414,6 +404,7 @@ function CommentForm({
               onFocus={handleFocus}
               onBlur={handleBlur}
               onUpArrowAtStart={handleUpArrowAtStart}
+              uploadFile={handleUploadFile}
               maxLength={CommentValidation.maxLength}
               placeholder={
                 placeholder ||
@@ -455,7 +446,7 @@ function CommentForm({
                 </ButtonSmall>
               </HStack>
               <Tooltip content={t("Attach file")} placement="top">
-                <NudeButton onClick={handleImageUpload}>
+                <NudeButton onClick={handleAttachClick}>
                   <AttachmentIcon color={theme.textTertiary} />
                 </NudeButton>
               </Tooltip>

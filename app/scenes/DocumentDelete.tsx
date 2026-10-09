@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { errToString } from "@shared/utils/error";
 import type Document from "~/models/Document";
 import Button from "~/components/Button";
+import DocumentArchiveDialog from "~/components/DocumentArchiveDialog";
 import Flex from "~/components/Flex";
 import Text from "~/components/Text";
 import useStores from "~/hooks/useStores";
@@ -18,11 +19,16 @@ type Props = {
 
 function DocumentDelete({ document, onSubmit }: Props) {
   const { t } = useTranslation();
-  const { ui, documents, collections, userMemberships, groupMemberships } =
-    useStores();
+  const {
+    ui,
+    dialogs,
+    documents,
+    collections,
+    userMemberships,
+    groupMemberships,
+  } = useStores();
   const history = useHistory();
   const [isDeleting, setDeleting] = React.useState(false);
-  const [isArchiving, setArchiving] = React.useState(false);
   const canArchive = !document.isDraft && !document.isArchived;
   const collection = document.collectionId
     ? collections.get(document.collectionId)
@@ -83,20 +89,17 @@ function DocumentDelete({ document, onSubmit }: Props) {
   );
 
   const handleArchive = React.useCallback(
-    async (ev: React.SyntheticEvent) => {
+    (ev: React.SyntheticEvent) => {
       ev.preventDefault();
-      setArchiving(true);
 
-      try {
-        await document.archive();
-        onSubmit();
-      } catch (err) {
-        toast.error(errToString(err));
-      } finally {
-        setArchiving(false);
-      }
+      // Swap to the archive dialog so a reason can be left
+      dialogs.openModal({
+        title: t("Are you sure you want to archive this document?"),
+        content: <DocumentArchiveDialog document={document} />,
+        replace: true,
+      });
     },
-    [onSubmit, document]
+    [dialogs, document, t]
   );
 
   return (
@@ -141,7 +144,7 @@ function DocumentDelete({ document, onSubmit }: Props) {
       <Flex justify="flex-end" gap={8}>
         {canArchive && (
           <Button type="button" onClick={handleArchive} neutral>
-            {isArchiving ? `${t("Archiving")}…` : t("Archive")}
+            {t("Archive")}…
           </Button>
         )}
         <Button type="submit" danger>

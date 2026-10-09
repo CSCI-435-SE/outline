@@ -21,8 +21,9 @@ function Archive() {
         empty={
           <Empty>{t("The document archive is empty at the moment.")}</Empty>
         }
-        showCollection
         showTemplate
+        showArchivedPath
+        showArchivedReason
       />
     </Scene>
   );

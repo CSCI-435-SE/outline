@@ -83,6 +83,14 @@ function KeyboardShortcuts({ defaultQuery = "" }: Props) {
           {
             shortcut: (
               <>
+                <Key>Ctrl</Key> + <Key symbol>{altDisplay}</Key> + <Key>s</Key>
+              </>
+            ),
+            label: t("Star or unstar current document"),
+          },
+          {
+            shortcut: (
+              <>
                 <Key symbol>{metaDisplay}</Key> + <Key>.</Key>
               </>
             ),

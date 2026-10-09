@@ -52,6 +52,29 @@ describe("documentUpdater", () => {
     expect(document.lastModifiedById).toEqual(user.id);
   });
 
+  it("should include the commit message in the publish event data", async () => {
+    const user = await buildUser();
+    let document = await buildDocument({
+      teamId: user.teamId,
+    });
+
+    document = await withAPIContext(user, (ctx) =>
+      documentUpdater(ctx, {
+        publish: true,
+        message: "Fixed a typo in the intro",
+        document,
+      })
+    );
+
+    const event = await Event.findLatest({
+      teamId: user.teamId,
+    });
+    expect(event!.name).toEqual("documents.publish");
+    expect(event!.data).toMatchObject({
+      message: "Fixed a typo in the intro",
+    });
+  });
+
   it("should not change lastModifiedById or generate event if nothing changed", async () => {
     const user = await buildUser();
     let document = await buildDocument({

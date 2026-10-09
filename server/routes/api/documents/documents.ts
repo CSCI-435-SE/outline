@@ -398,7 +398,9 @@ router.post(
       limit: ctx.state.pagination.limit,
     });
 
-    const data = await presentDocuments(ctx, documents);
+    const data = await presentDocuments(ctx, documents, {
+      includeAncestors: true,
+    });
     const policies = presentPolicies(user, documents);
 
     ctx.body = {
@@ -989,6 +991,8 @@ router.post(
       query,
       statusFilter,
       dateFilter,
+      dateFrom,
+      dateTo,
       collectionId,
       userId,
       sort,
@@ -1013,6 +1017,8 @@ router.post(
       await SearchProviderManager.getProvider().searchTitlesForUser(user, {
         query,
         dateFilter,
+        dateFrom,
+        dateTo,
         statusFilter,
         collectionId,
         collaboratorIds,
@@ -1045,6 +1051,8 @@ router.post(
       documentId,
       userId,
       dateFilter,
+      dateFrom,
+      dateTo,
       statusFilter = [],
       shareId,
       snippetMinWords,
@@ -1100,6 +1108,8 @@ router.post(
         collectionId: collection?.id || document?.collectionId,
         share,
         dateFilter,
+        dateFrom,
+        dateTo,
         statusFilter,
         offset,
         limit,
@@ -1147,6 +1157,8 @@ router.post(
         collectionId,
         documentIds,
         dateFilter,
+        dateFrom,
+        dateTo,
         statusFilter,
         offset,
         limit,
@@ -1203,7 +1215,7 @@ router.post(
   validate(T.DocumentsTemplatizeSchema),
   transaction(),
   async (ctx: APIContext<T.DocumentsTemplatizeReq>) => {
-    const { id, collectionId, publish } = ctx.input.body;
+    const { id, collectionId, publish, title, description } = ctx.input.body;
     const { user } = ctx.state.auth;
     const { transaction } = ctx.state;
 
@@ -1233,7 +1245,8 @@ router.post(
       createdById: user.id,
       icon: original.icon,
       color: original.color,
-      title: original.title,
+      title: title?.trim() || original.title,
+      description: description?.trim() || null,
       content: original.content,
     });
 
@@ -1416,7 +1429,7 @@ router.post(
   validate(T.DocumentsArchiveSchema),
   transaction(),
   async (ctx: APIContext<T.DocumentsArchiveReq>) => {
-    const { id } = ctx.input.body;
+    const { id, reason } = ctx.input.body;
     const { user } = ctx.state.auth;
     const { transaction } = ctx.state;
 
@@ -1427,7 +1440,7 @@ router.post(
     });
     authorize(user, "archive", document);
 
-    await document.archiveWithCtx(ctx);
+    await document.archiveWithCtx(ctx, reason);
 
     ctx.body = {
       data: await presentDocument(ctx, document),

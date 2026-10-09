@@ -22,6 +22,7 @@ import AuthenticationHelper from "@server/models/helpers/AuthenticationHelper";
 import { DocumentHelper } from "@server/models/helpers/DocumentHelper";
 import { sequelize } from "@server/storage/database";
 import { PluginManager } from "@server/utils/PluginManager";
+import builtInTemplatesProvisioner from "./builtInTemplatesProvisioner";
 import groupsSyncer from "./groupsSyncer";
 import teamProvisioner from "./teamProvisioner";
 import userProvisioner from "./userProvisioner";
@@ -230,6 +231,15 @@ async function accountProvisioner(
 
     if (provision) {
       await provisionFirstCollection(ctx, team, user);
+
+      try {
+        await builtInTemplatesProvisioner({ user });
+      } catch (err) {
+        // Missing built-in templates should never prevent sign in.
+        Logger.error("Failed to provision built-in templates", toError(err), {
+          teamId: team.id,
+        });
+      }
     }
   }
 

@@ -10,6 +10,7 @@ import {
   UserRole,
 } from "@shared/types";
 import { TextHelper } from "@shared/utils/TextHelper";
+import { DocumentValidation } from "@shared/validations";
 import { createContext } from "@server/context";
 import { parser } from "@server/editor";
 import type { Group, User } from "@server/models";
@@ -1389,6 +1390,35 @@ describe("#documents.search_titles", () => {
     expect(body.data.length).toEqual(0);
   });
 
+  it("should allow filtering of results by custom date range", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      title: "Super secret",
+      createdAt: new Date("2025-04-15T12:00:00.000Z"),
+      updatedAt: new Date("2025-04-15T12:00:00.000Z"),
+    });
+    await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      title: "Super secret",
+      createdAt: new Date("2025-07-01T12:00:00.000Z"),
+      updatedAt: new Date("2025-07-01T12:00:00.000Z"),
+    });
+    const res = await server.post("/api/documents.search_titles", user, {
+      body: {
+        query: "SECRET",
+        dateFrom: "2025-03-01T00:00:00.000Z",
+        dateTo: "2025-06-01T00:00:00.000Z",
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.length).toEqual(1);
+    expect(body.data[0].id).toEqual(document.id);
+  });
+
   it("should allow filtering to include archived", async () => {
     const user = await buildUser();
     const document = await buildDocument({
@@ -1923,6 +1953,141 @@ describe("#documents.search", () => {
     expect(res.status).toEqual(400);
   });
 
+  describe("custom date range", () => {
+    const buildDocumentsAt = async (user: User, dates: string[]) =>
+      Promise.all(
+        dates.map((date) =>
+          buildDocument({
+            userId: user.id,
+            teamId: user.teamId,
+            title: `range test ${date}`,
+            createdAt: new Date(date),
+            updatedAt: new Date(date),
+          })
+        )
+      );
+
+    const titlesOf = (body: { data: { document: { title: string } }[] }) =>
+      body.data.map((result) => result.document.title).sort();
+
+    it("should include documents updated within the range", async () => {
+      const user = await buildUser();
+      await buildDocumentsAt(user, [
+        "2025-02-28T23:59:59.999Z",
+        "2025-03-01T00:00:00.000Z",
+        "2025-04-15T12:00:00.000Z",
+        "2025-06-01T00:00:00.000Z",
+      ]);
+      const res = await server.post("/api/documents.search", user, {
+        body: {
+          query: "range test",
+          dateFrom: "2025-03-01T00:00:00.000Z",
+          dateTo: "2025-06-01T00:00:00.000Z",
+        },
+      });
+      const body = await res.json();
+      expect(res.status).toEqual(200);
+      expect(titlesOf(body)).toEqual([
+        "range test 2025-03-01T00:00:00.000Z",
+        "range test 2025-04-15T12:00:00.000Z",
+      ]);
+    });
+
+    it("should include documents when the range is a single day", async () => {
+      const user = await buildUser();
+      await buildDocumentsAt(user, [
+        "2025-04-14T23:59:59.999Z",
+        "2025-04-15T12:00:00.000Z",
+        "2025-04-16T00:00:00.000Z",
+      ]);
+      const res = await server.post("/api/documents.search", user, {
+        body: {
+          query: "range test",
+          dateFrom: "2025-04-15T00:00:00.000Z",
+          dateTo: "2025-04-16T00:00:00.000Z",
+        },
+      });
+      const body = await res.json();
+      expect(res.status).toEqual(200);
+      expect(titlesOf(body)).toEqual(["range test 2025-04-15T12:00:00.000Z"]);
+    });
+
+    it("should allow only a start date", async () => {
+      const user = await buildUser();
+      await buildDocumentsAt(user, [
+        "2024-01-01T00:00:00.000Z",
+        "2025-03-01T00:00:00.000Z",
+      ]);
+      const res = await server.post("/api/documents.search", user, {
+        body: {
+          query: "range test",
+          dateFrom: "2025-01-01T00:00:00.000Z",
+        },
+      });
+      const body = await res.json();
+      expect(res.status).toEqual(200);
+      expect(titlesOf(body)).toEqual(["range test 2025-03-01T00:00:00.000Z"]);
+    });
+
+    it("should allow only an end date", async () => {
+      const user = await buildUser();
+      await buildDocumentsAt(user, [
+        "2024-01-01T00:00:00.000Z",
+        "2025-03-01T00:00:00.000Z",
+      ]);
+      const res = await server.post("/api/documents.search", user, {
+        body: {
+          query: "range test",
+          dateTo: "2025-01-01T00:00:00.000Z",
+        },
+      });
+      const body = await res.json();
+      expect(res.status).toEqual(200);
+      expect(titlesOf(body)).toEqual(["range test 2024-01-01T00:00:00.000Z"]);
+    });
+
+    it("should fail when dateFrom is after dateTo", async () => {
+      const user = await buildUser();
+      const res = await server.post("/api/documents.search", user, {
+        body: {
+          query: "range test",
+          dateFrom: "2025-06-01T00:00:00.000Z",
+          dateTo: "2025-03-01T00:00:00.000Z",
+        },
+      });
+      const body = await res.json();
+      expect(res.status).toEqual(400);
+      expect(body.message).toContain("dateFrom must be before dateTo");
+    });
+
+    it("should fail for an invalid date", async () => {
+      const user = await buildUser();
+      const res = await server.post("/api/documents.search", user, {
+        body: {
+          query: "range test",
+          dateFrom: "not a date",
+        },
+      });
+      expect(res.status).toEqual(400);
+    });
+
+    it("should fail when combined with dateFilter", async () => {
+      const user = await buildUser();
+      const res = await server.post("/api/documents.search", user, {
+        body: {
+          query: "range test",
+          dateFilter: "week",
+          dateFrom: "2025-03-01T00:00:00.000Z",
+        },
+      });
+      const body = await res.json();
+      expect(res.status).toEqual(400);
+      expect(body.message).toContain(
+        "dateFilter cannot be combined with dateFrom or dateTo"
+      );
+    });
+  });
+
   it("should require authentication", async () => {
     const res = await server.post("/api/documents.search", {
       body: {
@@ -2153,6 +2318,63 @@ describe("#documents.templatize", () => {
     expect(res.status).toBe(200);
     expect(body.data.publishedAt).toBeTruthy();
     expect(body.data.collectionId).toBeNull();
+  });
+  it("should use the provided title and description", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      createdById: user.id,
+      teamId: user.teamId,
+    });
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      title: "Q3 planning",
+    });
+    const res = await server.post("/api/documents.templatize", user, {
+      body: {
+        id: document.id,
+        collectionId: collection.id,
+        publish: true,
+        title: "Quarterly planning",
+        description: "Plan goals for the next quarter",
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.data.title).toEqual("Quarterly planning");
+    expect(body.data.description).toEqual("Plan goals for the next quarter");
+    expect(body.data.isBuiltIn).toEqual(false);
+
+    // the original document is unchanged
+    await document.reload();
+    expect(document.title).toEqual("Q3 planning");
+    expect(document.template).toEqual(false);
+  });
+  it("should default the title to the document title", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      createdById: user.id,
+      teamId: user.teamId,
+    });
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      title: "Onboarding checklist",
+    });
+    const res = await server.post("/api/documents.templatize", user, {
+      body: {
+        id: document.id,
+        collectionId: collection.id,
+        publish: true,
+        title: "  ",
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.data.title).toEqual("Onboarding checklist");
+    expect(body.data.description).toBeNull();
   });
   it("should create a draft non-workspace template", async () => {
     const user = await buildUser();
@@ -2405,6 +2627,83 @@ describe("#documents.archived", () => {
   it("should require authentication", async () => {
     const res = await server.post("/api/documents.archived");
     expect(res.status).toEqual(401);
+  });
+
+  it("should include the full ancestor chain for a nested document, without a further request", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      teamId: user.teamId,
+      userId: user.id,
+    });
+    const grandparent = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      title: "Engineering",
+    });
+    const parent = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      parentDocumentId: grandparent.id,
+      title: "Backend",
+    });
+    const child = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      parentDocumentId: parent.id,
+      title: "Auth",
+    });
+    await withAPIContext(user, (ctx) => child.archiveWithCtx(ctx));
+
+    const res = await server.post("/api/documents.archived", user);
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+
+    const presented = body.data.find(
+      (doc: { id: string }) => doc.id === child.id
+    );
+    expect(presented.ancestorDocuments).toEqual([
+      { id: grandparent.id, title: "Engineering" },
+      { id: parent.id, title: "Backend" },
+    ]);
+  });
+
+  it("should keep an archived parent document in the ancestor chain", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      teamId: user.teamId,
+      userId: user.id,
+    });
+    const parent = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      title: "Backend",
+    });
+    const child = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      parentDocumentId: parent.id,
+      title: "Auth",
+    });
+
+    // Archiving the parent cascades to the child, so both end up archived.
+    await withAPIContext(user, (ctx) => parent.archiveWithCtx(ctx));
+
+    const res = await server.post("/api/documents.archived", user);
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data).toHaveLength(2);
+
+    const presented = body.data.find(
+      (doc: { id: string }) => doc.id === child.id
+    );
+    expect(presented.ancestorDocuments).toEqual([
+      { id: parent.id, title: "Backend" },
+    ]);
   });
 });
 
@@ -3180,6 +3479,8 @@ describe("#documents.restore", () => {
     expect(res.status).toEqual(200);
     expect(body.data.parentDocumentId).toEqual(null);
     expect(body.data.archivedAt).toEqual(null);
+    // Restore is unaffected by the archive list's ancestor path feature.
+    expect(body.data.ancestorDocuments).toBeUndefined();
   });
 
   it("should restore the document to a previous version", async () => {
@@ -4297,6 +4598,197 @@ describe("#documents.archive", () => {
     expect(res.status).toEqual(200);
     expect(body.data.updatedBy.id).toEqual(user.id);
     expect(body.data.archivedAt).toBeTruthy();
+  });
+
+  it("should persist and return an archive reason when provided", async () => {
+    const admin = await buildAdmin();
+    const user = await buildUser({ teamId: admin.teamId });
+    const collection = await buildCollection({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const document = await buildDocument({
+      userId: admin.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+    });
+    const res = await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+        reason: "No longer relevant to the current project",
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.archivedReason).toEqual(
+      "No longer relevant to the current project"
+    );
+  });
+
+  it("should store no reason when none is provided", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const res = await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.archivedReason).toBeNull();
+  });
+
+  it("should store no reason when the reason is empty", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const res = await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+        reason: "",
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.archivedAt).toBeTruthy();
+    expect(body.data.archivedReason).toBeNull();
+  });
+
+  it("should store no reason when the reason is only whitespace", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const res = await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+        reason: "   \n\t  ",
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.archivedReason).toBeNull();
+  });
+
+  it("should trim whitespace around the reason", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const res = await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+        reason: "  Superseded by the 2026 guide  ",
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.archivedReason).toEqual("Superseded by the 2026 guide");
+  });
+
+  it("should allow a reason at the maximum length", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const reason = "a".repeat(DocumentValidation.maxArchivedReasonLength);
+    const res = await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+        reason,
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.archivedReason).toEqual(reason);
+  });
+
+  it("should reject a reason over the maximum length", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const res = await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+        reason: "a".repeat(DocumentValidation.maxArchivedReasonLength + 1),
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(400);
+    expect(body.message).toContain("reason");
+
+    // The document must not have been archived
+    const reloaded = await Document.findByPk(document.id);
+    expect(reloaded?.archivedAt).toBeNull();
+    expect(reloaded?.archivedReason).toBeNull();
+  });
+
+  it("should not copy the reason to child documents", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+    });
+    const child = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      parentDocumentId: document.id,
+    });
+    const res = await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+        reason: "Project finished",
+      },
+    });
+    expect(res.status).toEqual(200);
+
+    await child.reload();
+    expect(child.archivedAt).toBeTruthy();
+    expect(child.archivedReason).toBeNull();
+  });
+
+  it("should clear the reason when the document is restored", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+    });
+    await server.post("/api/documents.archive", user, {
+      body: {
+        id: document.id,
+        reason: "Project finished",
+      },
+    });
+    const res = await server.post("/api/documents.restore", user, {
+      body: {
+        id: document.id,
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.archivedAt).toBeNull();
+    expect(body.data.archivedReason).toBeNull();
   });
 
   it("should require authentication", async () => {
