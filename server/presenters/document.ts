@@ -86,6 +86,7 @@ async function presentDocument(
     updatedBy: undefined,
     publishedAt: document.publishedAt,
     archivedAt: document.archivedAt,
+    archivedReason: document.archivedReason,
     deletedAt: document.deletedAt,
     collaboratorIds: [],
     revision: document.revisionCount,

@@ -103,6 +103,8 @@
   "Are you sure you want to archive this document?": "Are you sure you want to archive this document?",
   "Document archived": "Document archived",
   "Archiving this document will remove it from the collection and search results.": "Archiving this document will remove it from the collection and search results.",
+  "Reason (optional)": "Reason (optional)",
+  "Let others know why this document was archived": "Let others know why this document was archived",
   "{{ documentName }} restored": "{{ documentName }} restored",
   "Choose a collection": "Choose a collection",
   "Delete {{ documentName }}": "Delete {{ documentName }}",

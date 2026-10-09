@@ -59,6 +59,9 @@ export const DocumentValidation = {
   /** The maximum length of the document summary */
   maxSummaryLength: 1000,
 
+  /** The maximum length of the explanation given when archiving a document */
+  maxArchivedReasonLength: 1000,
+
   /** The maximum size of the collaborative document state */
   maxStateLength: 1500 * 1024,
 

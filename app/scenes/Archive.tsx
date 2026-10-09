@@ -23,6 +23,7 @@ function Archive() {
         }
         showTemplate
         showArchivedPath
+        showArchivedReason
       />
     </Scene>
   );

@@ -618,9 +618,10 @@ export default class DocumentsStore extends Store<Document> {
   }
 
   @action
-  archive = async (document: Document) => {
+  archive = async (document: Document, reason?: string) => {
     const res = await client.post("/documents.archive", {
       id: document.id,
+      reason,
     });
     runInAction("Document#archive", () => {
       invariant(res?.data, "Data should be available");

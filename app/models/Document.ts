@@ -61,6 +61,12 @@ export default class Document extends ArchivableModel implements Searchable {
   @observable
   lastViewedAt: string | undefined;
 
+  /**
+   * An optional explanation left by the user who archived the document.
+   */
+  @observable
+  archivedReason: string | null;
+
   store: DocumentsStore;
 
   @observable.shallow
@@ -468,7 +474,7 @@ export default class Document extends ArchivableModel implements Searchable {
     }
   }
 
-  archive = () => this.store.archive(this);
+  archive = (reason?: string) => this.store.archive(this, reason);
 
   restore = (options?: { revisionId?: string; collectionId?: string }) =>
     this.store.restore(this, options);
