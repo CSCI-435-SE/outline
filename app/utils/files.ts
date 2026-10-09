@@ -11,6 +11,8 @@ type UploadOptions = {
   name?: string;
   /** The document that this file was uploaded in, if any */
   documentId?: string;
+  /** The comment that this file was uploaded in, if any */
+  commentId?: string;
   /** The preset to use for attachment configuration */
   preset: AttachmentPreset;
   /** Callback will be passed a number between 0-1 as upload progresses */
@@ -54,6 +56,7 @@ export const uploadFile = async (
   const response = await client.post("/attachments.create", {
     preset: options.preset,
     documentId: options.documentId,
+    commentId: options.commentId,
     contentType: file.type,
     size: file.size,
     name,

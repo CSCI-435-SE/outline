@@ -3,28 +3,28 @@ import { v4 as uuidv4 } from "uuid";
 import { m } from "framer-motion";
 import { action } from "mobx";
 import { observer } from "mobx-react";
-import { ImageIcon } from "outline-icons";
+import { AttachmentIcon, CloseIcon } from "outline-icons";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useTheme } from "styled-components";
 import { parseReactionShorthand } from "@shared/editor/lib/emoji";
-import { getCommentCharacterCount } from "@shared/editor/lib/getCommentCharacterCount";
 import type { ProsemirrorData } from "@shared/types";
+import { AttachmentPreset } from "@shared/types";
 import { getEventFiles } from "@shared/utils/files";
-import { AttachmentValidation, CommentValidation } from "@shared/validations";
+import { CommentValidation } from "@shared/validations";
 import Comment from "~/models/Comment";
 import { Avatar } from "~/components/Avatar";
 import ButtonSmall from "~/components/ButtonSmall";
 import { useDocumentContext } from "~/components/DocumentContext";
 import Flex from "~/components/Flex";
 import NudeButton from "~/components/NudeButton";
-import Text from "~/components/Text";
 import Tooltip from "~/components/Tooltip";
 import type { Editor as SharedEditor } from "~/editor";
 import useCurrentUser from "~/hooks/useCurrentUser";
 import useOnClickOutside from "~/hooks/useOnClickOutside";
 import useStores from "~/hooks/useStores";
+import { uploadFile } from "~/utils/files";
 import { Bubble } from "./CommentThreadItem";
 import { HighlightedText } from "./HighlightText";
 import lazyWithRetry from "~/utils/lazyWithRetry";
@@ -89,7 +89,7 @@ function CommentForm({
   const editorRef = React.useRef<SharedEditor>(null);
   const [forceRender, setForceRender] = React.useState(0);
   const [inputFocused, setInputFocused] = React.useState(autoFocus);
-  const [charCount, setCharCount] = React.useState(0);
+  const [attachedFiles, setAttachedFiles] = React.useState<File[]>([]);
   const file = React.useRef<HTMLInputElement>(null);
   const hasFocusedOnMount = React.useRef(false);
   const theme = useTheme();
@@ -115,13 +115,34 @@ function CommentForm({
     return () => window.removeEventListener("beforeunload", reset);
   }, [reset]);
 
+  const handleUploadFile = React.useCallback(
+    async (
+      f: File | string,
+      uploadOptions?: {
+        id?: string;
+        onProgress?: (fractionComplete: number) => void;
+      }
+    ) => {
+      const result = await uploadFile(f instanceof File ? f : new File([], f), {
+        id: uploadOptions?.id,
+        documentId,
+        preset: AttachmentPreset.DocumentAttachment,
+        onProgress: uploadOptions?.onProgress,
+      });
+      return result.url;
+    },
+    [documentId]
+  );
+
   const handleCreateComment = action(async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!draft && attachedFiles.length === 0) return;
 
+    const filesToUpload = [...attachedFiles];
+    setAttachedFiles([]);
     onSaveDraft(undefined);
     setForceRender((s) => ++s);
     setInputFocused(false);
-    setCharCount(0);
 
     const commentDraft = draft;
     const comment =
@@ -139,20 +160,17 @@ function CommentForm({
     comment
       .save({
         documentId,
-        data: draft,
+        data: draft ?? { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "\u200B" }] }] },
       })
       .then(() => onSubmit?.())
       .catch(() => {
         onSaveDraft(commentDraft);
         setForceRender((s) => ++s);
-
+        setAttachedFiles(filesToUpload);
         comment.isNew = true;
         toast.error(t("Error creating comment"));
       });
 
-    // optimistically update the comment model. Setting the data here, rather
-    // than waiting for save() to resolve, avoids a frame where the rendered
-    // comment is empty before the saved data is applied.
     if (draft) {
       comment.data = draft;
     }
@@ -163,12 +181,13 @@ function CommentForm({
 
   const handleCreateReply = action(async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!draft) {
-      return;
-    }
+    if (!draft && attachedFiles.length === 0) return;
+
+    const filesToUpload = [...attachedFiles];
+    setAttachedFiles([]);
 
     // "+:emoji:" shorthand: react to the comment above instead of replying.
-    if (thread && !thread.isNew) {
+    if (draft && thread && !thread.isNew) {
       const emoji = parseReactionShorthand(draft);
       if (emoji) {
         const target = comments
@@ -181,8 +200,6 @@ function CommentForm({
           setForceRender((s) => ++s);
           void target.addReaction({ emoji, user });
           onSubmit?.();
-
-          // re-focus the comment editor
           setTimeout(() => {
             editorRef.current?.focusAtStart();
           }, 0);
@@ -194,7 +211,6 @@ function CommentForm({
     const commentDraft = draft;
     onSaveDraft(undefined);
     setForceRender((s) => ++s);
-    setCharCount(0);
 
     const comment = new Comment(
       {
@@ -214,23 +230,24 @@ function CommentForm({
     comments.add(comment);
 
     comment
-      .save()
+      .save({
+        documentId,
+        data: draft ?? { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "\u200B" }] }] },
+      })
       .then(() => onSubmit?.())
       .catch(() => {
         onSaveDraft(commentDraft);
         setForceRender((s) => ++s);
-
+        setAttachedFiles(filesToUpload);
         comments.remove(comment.id);
         comment.isNew = true;
         toast.error(t("Error creating comment"));
       });
 
-    // optimistically update the comment model
     comment.isNew = false;
     comment.createdById = user.id;
     comment.createdBy = user;
 
-    // re-focus the comment editor
     setTimeout(() => {
       editorRef.current?.focusAtStart();
     }, 0);
@@ -241,11 +258,6 @@ function CommentForm({
   ) => {
     const text = value(true, true);
     onSaveDraft(text ? value(false, true) : undefined);
-    setCharCount(
-      editorRef.current
-        ? getCommentCharacterCount(editorRef.current.view.state.doc)
-        : 0
-    );
   };
 
   const handleSave = () => {
@@ -264,7 +276,7 @@ function CommentForm({
     onSaveDraft(undefined);
     setForceRender((s) => ++s);
     setInputFocused(false);
-    setCharCount(0);
+    setAttachedFiles([]);
     await reset();
   };
 
@@ -286,10 +298,23 @@ function CommentForm({
       return;
     }
 
-    return editorRef.current?.insertFiles(event, files);
+    // Use insertFiles to handle the upload through the editor
+    void editorRef.current?.insertFiles(event, files);
+
+    // Also track in state for display
+    setAttachedFiles((prev) => [...prev, ...files]);
+    setInputFocused(true);
+
+    if (file.current) {
+      file.current.value = "";
+    }
   };
 
-  const handleImageUpload = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleRemoveFile = (index: number) => {
+    setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAttachClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     event.preventDefault();
     file.current?.click();
@@ -302,13 +327,8 @@ function CommentForm({
     }
   };
 
-  // Focus the editor when it's a new comment just mounted
   const handleMounted = React.useCallback(
     (ref) => {
-      if (ref) {
-        setCharCount(getCommentCharacterCount(ref.view.state.doc));
-      }
-
       if (autoFocus && ref && !hasFocusedOnMount.current) {
         if (!draft) {
           ref.focusAtStart();
@@ -321,25 +341,16 @@ function CommentForm({
 
   const presence = animatePresence
     ? {
-        initial: {
-          opacity: 0,
-          y: 10,
-        },
+        initial: { opacity: 0, y: 10 },
         animate: {
           opacity: 1,
           y: 0,
-          transition: {
-            duration: 0.2,
-            ease: "easeOut",
-          },
+          transition: { duration: 0.2, ease: "easeOut" },
         },
         exit: {
           opacity: 0,
           y: 10,
-          transition: {
-            duration: 0.2,
-            ease: "easeOut",
-          },
+          transition: { duration: 0.2, ease: "easeOut" },
         },
       }
     : {};
@@ -356,7 +367,6 @@ function CommentForm({
           ref={file}
           type="file"
           onChange={handleFilePicked}
-          accept={AttachmentValidation.imageContentTypes.join(", ")}
           tabIndex={-1}
         />
       </VisuallyHidden.Root>
@@ -394,18 +404,38 @@ function CommentForm({
               onFocus={handleFocus}
               onBlur={handleBlur}
               onUpArrowAtStart={handleUpArrowAtStart}
+              uploadFile={handleUploadFile}
               maxLength={CommentValidation.maxLength}
               placeholder={
                 placeholder ||
-                // isNew is only the case for comments that exist in draft state,
-                // they are marks in the document, but not yet saved to the db.
                 (thread?.isNew
                   ? `${t("Add a comment")}…`
                   : `${t("Add a reply")}…`)
               }
             />
           </React.Suspense>
-          {(inputFocused || draft) && (
+          {attachedFiles.length > 0 && (
+            <Flex column gap={4} style={{ marginTop: 4 }}>
+              {attachedFiles.map((f, i) => (
+                <Flex key={i} align="center" gap={6}>
+                  <AttachmentIcon size={16} color={theme.textTertiary} />
+                  <span
+                    style={{
+                      fontSize: 13,
+                      color: theme.textSecondary,
+                      flex: 1,
+                    }}
+                  >
+                    {f.name}
+                  </span>
+                  <NudeButton onClick={() => handleRemoveFile(i)}>
+                    <CloseIcon size={16} color={theme.textTertiary} />
+                  </NudeButton>
+                </Flex>
+              ))}
+            </Flex>
+          )}
+          {(inputFocused || draft || attachedFiles.length > 0) && (
             <Flex justify="space-between" gap={8}>
               <HStack>
                 <ButtonSmall type="submit" borderOnHover>
@@ -415,16 +445,11 @@ function CommentForm({
                   {t("Cancel")}
                 </ButtonSmall>
               </HStack>
-              <Flex align="center" gap={8}>
-                <Text size="xsmall" type="tertiary">
-                  {charCount}/{CommentValidation.maxLength}
-                </Text>
-                <Tooltip content={t("Upload image")} placement="top">
-                  <NudeButton onClick={handleImageUpload}>
-                    <ImageIcon color={theme.textTertiary} />
-                  </NudeButton>
-                </Tooltip>
-              </Flex>
+              <Tooltip content={t("Attach file")} placement="top">
+                <NudeButton onClick={handleAttachClick}>
+                  <AttachmentIcon color={theme.textTertiary} />
+                </NudeButton>
+              </Tooltip>
             </Flex>
           )}
         </Bubble>

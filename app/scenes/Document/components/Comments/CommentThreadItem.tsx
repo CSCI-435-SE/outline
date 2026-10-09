@@ -1,7 +1,7 @@
 import { differenceInMilliseconds } from "date-fns";
 import { runInAction } from "mobx";
 import { observer } from "mobx-react";
-import { DoneIcon } from "outline-icons";
+import { AttachmentIcon, DoneIcon } from "outline-icons";
 import { darken } from "polished";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
@@ -28,6 +28,7 @@ import { resolveCommentFactory } from "~/actions/definitions/comments";
 import useBoolean from "~/hooks/useBoolean";
 import useCurrentUser from "~/hooks/useCurrentUser";
 import CommentMenu from "~/menus/CommentMenu";
+import { client } from "~/utils/ApiClient";
 import lazyWithRetry from "~/utils/lazyWithRetry";
 
 const CommentEditor = lazyWithRetry(() => import("./CommentEditor"));
@@ -115,6 +116,9 @@ function CommentThreadItem({
   const { t } = useTranslation();
   const user = useCurrentUser();
   const [data, setData] = React.useState(comment.data);
+  const [attachments, setAttachments] = React.useState<
+    Array<{ id: string; name: string; url: string }>
+  >([]);
   const showAuthor = firstOfAuthor;
   const showTime = useShowTime(comment.createdAt, previousCommentCreatedAt);
   const showEdited =
@@ -122,6 +126,31 @@ function CommentThreadItem({
     comment.updatedAt !== comment.createdAt &&
     !comment.isResolved;
   const [isEditing, setEditing, setReadOnly] = useBoolean();
+
+  const fetchAttachments = React.useCallback(() => {
+    client
+      .post("/attachments.list", { commentId: comment.id })
+      .then((res) => {
+        if (res?.data) {
+          setAttachments(
+            res.data.map((a: any) => ({
+              id: a.id,
+              name: a.name,
+              url: `/api/attachments.redirect?id=${a.id}`,
+            }))
+          );
+        }
+      });
+  }, [comment.id]);
+  
+  React.useEffect(() => {
+    fetchAttachments();
+  }, [comment.id]);
+  
+  React.useEffect(() => {
+    const timer = setTimeout(fetchAttachments, 1500);
+    return () => clearTimeout(timer);
+  }, [comment.createdAt]);
 
   // Handle forced edit mode
   React.useEffect(() => {
@@ -250,6 +279,23 @@ function CommentThreadItem({
               <ButtonSmall onClick={handleCancel} neutral borderOnHover>
                 {t("Cancel")}
               </ButtonSmall>
+            </Flex>
+          )}
+          {attachments.length > 0 && (
+            <Flex column gap={4} style={{ marginTop: 4 }}>
+              {attachments.map((attachment) => (
+                <Flex key={attachment.id} align="center" gap={6}>
+                  <AttachmentIcon size={16} />
+                  <a
+                    href={attachment.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ fontSize: 13 }}
+                  >
+                    {attachment.name}
+                  </a>
+                </Flex>
+              ))}
             </Flex>
           )}
           <ResizingHeightContainer hideOverflow>
