@@ -7,6 +7,8 @@ function presentTemplate(template: Template) {
     url: template.path,
     urlId: template.urlId,
     title: template.title,
+    description: template.description,
+    isBuiltIn: template.isBuiltIn,
     data: template.content,
     icon: template.icon,
     color: template.color,

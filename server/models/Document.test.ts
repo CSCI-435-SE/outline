@@ -14,6 +14,7 @@ import {
   buildGuestUser,
 } from "@server/test/factories";
 import { withAPIContext } from "@server/test/support";
+import Collection from "./Collection";
 import UserMembership from "./UserMembership";
 
 beforeEach(() => {
@@ -254,6 +255,143 @@ describe("#findAllChildDocumentIds", () => {
     expect(
       await document.findAllChildDocumentIds(undefined, { paranoid: false })
     ).toEqual([child.id]);
+  });
+});
+
+describe("#findAncestorDocuments", () => {
+  test("should return empty array when document has no parent", async () => {
+    const document = await buildDocument();
+    expect(await document.findAncestorDocuments()).toEqual([]);
+  });
+
+  test("should return ancestors ordered from root to immediate parent", async () => {
+    const team = await buildTeam();
+    const user = await buildUser({ teamId: team.id });
+    const collection = await buildCollection({
+      userId: user.id,
+      teamId: team.id,
+    });
+    const grandparent = await buildDocument({
+      userId: user.id,
+      teamId: team.id,
+      collectionId: collection.id,
+      title: "Engineering",
+    });
+    const parent = await buildDocument({
+      userId: user.id,
+      teamId: team.id,
+      collectionId: collection.id,
+      parentDocumentId: grandparent.id,
+      title: "Backend",
+    });
+    const child = await buildDocument({
+      userId: user.id,
+      teamId: team.id,
+      collectionId: collection.id,
+      parentDocumentId: parent.id,
+      title: "Auth",
+    });
+
+    expect(await child.findAncestorDocuments()).toEqual([
+      { id: grandparent.id, title: "Engineering" },
+      { id: parent.id, title: "Backend" },
+    ]);
+  });
+
+  test("should still resolve ancestors after archiving removes the document from the collection's documentStructure", async () => {
+    const team = await buildTeam();
+    const user = await buildUser({ teamId: team.id });
+    const collection = await buildCollection({
+      userId: user.id,
+      teamId: team.id,
+    });
+    const parent = await buildDocument({
+      userId: user.id,
+      teamId: team.id,
+      collectionId: collection.id,
+      title: "Engineering",
+    });
+    const child = await buildDocument({
+      userId: user.id,
+      teamId: team.id,
+      collectionId: collection.id,
+      parentDocumentId: parent.id,
+      title: "Backend",
+    });
+
+    await withAPIContext(user, (ctx) => child.archiveWithCtx(ctx));
+
+    // Archiving removes the document from documentStructure, so a path
+    // computed from that tree would no longer resolve for it.
+    const reloadedCollection = await Collection.findByPk(collection.id, {
+      includeDocumentStructure: true,
+    });
+    expect(
+      reloadedCollection?.documentStructure?.some(
+        (node) => node.id === child.id
+      )
+    ).toBe(false);
+
+    // The ancestor chain, read from parentDocumentId directly, still
+    // reflects where the document lived when it was archived.
+    expect(await child.findAncestorDocuments()).toEqual([
+      { id: parent.id, title: "Engineering" },
+    ]);
+  });
+
+  test("should include an archived parent document in the chain", async () => {
+    const team = await buildTeam();
+    const user = await buildUser({ teamId: team.id });
+    const collection = await buildCollection({
+      userId: user.id,
+      teamId: team.id,
+    });
+    const parent = await buildDocument({
+      userId: user.id,
+      teamId: team.id,
+      collectionId: collection.id,
+      title: "Backend",
+    });
+    const child = await buildDocument({
+      userId: user.id,
+      teamId: team.id,
+      collectionId: collection.id,
+      parentDocumentId: parent.id,
+      title: "Auth",
+    });
+
+    // Archiving the parent cascades to the child.
+    await withAPIContext(user, (ctx) => parent.archiveWithCtx(ctx));
+    expect((await child.reload()).archivedAt).toBeTruthy();
+
+    expect(await child.findAncestorDocuments()).toEqual([
+      { id: parent.id, title: "Backend" },
+    ]);
+  });
+
+  test("should exclude a permanently deleted ancestor", async () => {
+    const team = await buildTeam();
+    const user = await buildUser({ teamId: team.id });
+    const collection = await buildCollection({
+      userId: user.id,
+      teamId: team.id,
+    });
+    const parent = await buildDocument({
+      userId: user.id,
+      teamId: team.id,
+      collectionId: collection.id,
+      title: "Backend",
+    });
+    const child = await buildDocument({
+      userId: user.id,
+      teamId: team.id,
+      collectionId: collection.id,
+      parentDocumentId: parent.id,
+      title: "Auth",
+    });
+    await parent.destroy();
+
+    expect(await child.findAncestorDocuments()).toEqual([]);
   });
 });
 

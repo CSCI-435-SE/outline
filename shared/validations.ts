@@ -117,6 +117,11 @@ export const RevisionValidation = {
   maxNameLength: 255,
 };
 
+export const TemplateValidation = {
+  /** The maximum length of the template description */
+  maxDescriptionLength: 500,
+};
+
 export const UserPasskeyValidation = {
   minNameLength: 1,
   maxNameLength: 255,

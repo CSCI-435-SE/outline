@@ -89,6 +89,13 @@ export default class Document extends ArchivableModel implements Searchable {
     fileName?: string;
   };
 
+  /**
+   * The chain of ancestor documents (root to immediate parent), only
+   * present when fetched via the archived documents list.
+   */
+  @observable
+  ancestorDocuments?: { id: string; title: string }[];
+
   @computed
   get searchContent(): string {
     return this.title;

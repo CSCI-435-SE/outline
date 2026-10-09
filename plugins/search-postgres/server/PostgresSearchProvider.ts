@@ -676,6 +676,22 @@ export default class PostgresSearchProvider extends BaseSearchProvider {
       });
     }
 
+    if (options.dateFrom) {
+      where[Op.and].push({
+        updatedAt: {
+          [Op.gte]: options.dateFrom,
+        },
+      });
+    }
+
+    if (options.dateTo) {
+      where[Op.and].push({
+        updatedAt: {
+          [Op.lt]: options.dateTo,
+        },
+      });
+    }
+
     if (options.collaboratorIds) {
       where[Op.and].push({
         collaboratorIds: {

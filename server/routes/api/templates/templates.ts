@@ -22,7 +22,8 @@ router.post(
   validate(T.TemplatesCreateSchema),
   transaction(),
   async (ctx: APIContext<T.TemplatesCreateReq>) => {
-    const { id, title, data, icon, color, collectionId } = ctx.input.body;
+    const { id, title, description, data, icon, color, collectionId } =
+      ctx.input.body;
     const editorVersion = ctx.headers["x-editor-version"] as string | undefined;
 
     const { transaction } = ctx.state;
@@ -42,6 +43,7 @@ router.post(
     let template = await Template.createWithCtx(ctx, {
       id,
       title,
+      description,
       icon,
       color,
       content: data,
@@ -112,7 +114,7 @@ router.post(
     if (query) {
       where[Op.and].push(
         Sequelize.literal(
-          `unaccent(LOWER("template"."title")) like unaccent(LOWER(:query))`
+          `(unaccent(LOWER("template"."title")) like unaccent(LOWER(:query)) OR unaccent(LOWER(COALESCE("template"."description", ''))) like unaccent(LOWER(:query)))`
         )
       );
     }
@@ -254,6 +256,7 @@ router.post(
 
     let template = await Template.createWithCtx(ctx, {
       title: title ?? original.title,
+      description: original.description,
       createdById: user.id,
       lastModifiedById: user.id,
       teamId: user.teamId,

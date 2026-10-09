@@ -4,9 +4,11 @@ import React, { useRef } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import styled from "styled-components";
 import type { ProsemirrorData } from "@shared/types";
+import { TemplateValidation } from "@shared/validations";
 import type Template from "~/models/Template";
 import Editor from "~/scenes/Document/components/Editor";
 import { DocumentContextProvider } from "~/components/DocumentContext";
+import Input from "~/components/Input";
 import LoadingIndicator from "~/components/LoadingIndicator";
 import Notice from "~/components/Notice";
 import useBoolean from "~/hooks/useBoolean";
@@ -30,6 +32,12 @@ export const TemplateForm = observer(function TemplateForm_({
 
   const handleChangeTitle = (title: string) => {
     template.title = title;
+  };
+
+  const handleChangeDescription = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    template.description = event.target.value;
   };
 
   const handleChangeIcon = (icon: string, color: string) => {
@@ -72,6 +80,15 @@ export const TemplateForm = observer(function TemplateForm_({
         >
           {t("You’re editing a template")}
         </Notice>
+        <Input
+          label={t("Description")}
+          placeholder={t("Briefly describe when to use this template")}
+          value={template.description ?? ""}
+          onChange={handleChangeDescription}
+          maxLength={TemplateValidation.maxDescriptionLength}
+          readOnly={readOnly}
+          margin="16px 0 0"
+        />
         <Editor
           id={template.id}
           ref={ref}

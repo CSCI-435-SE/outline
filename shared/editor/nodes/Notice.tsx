@@ -15,6 +15,26 @@ import type { MarkdownSerializerState } from "../lib/markdown/serializer";
 import noticesRule from "../rules/notices";
 import Node from "./Node";
 
+/** Node types that are written to markdown as `:::` fenced blocks. */
+const colonFencedNodes = ["container_notice", "slideshow"];
+
+/**
+ * Returns how deeply `:::` fenced blocks are nested inside the given node.
+ *
+ * @param node the node to inspect.
+ * @returns the maximum nesting depth of fenced descendants, 0 if none.
+ */
+function colonFenceDepth(node: ProsemirrorNode): number {
+  let depth = 0;
+  node.forEach((child) => {
+    const childDepth =
+      colonFenceDepth(child) +
+      (colonFencedNodes.includes(child.type.name) ? 1 : 0);
+    depth = Math.max(depth, childDepth);
+  });
+  return depth;
+}
+
 export enum NoticeTypes {
   Info = "info",
   Success = "success",
@@ -166,10 +186,15 @@ export default class Notice extends Node {
   }
 
   toMarkdown(state: MarkdownSerializerState, node: ProsemirrorNode) {
-    state.write("\n:::" + (node.attrs.style || "info") + "\n");
+    // A closing marker only ends the notice if it has at least as many colons
+    // as the opening one, so use a longer marker than any nested ::: block
+    // (e.g. a slideshow inside a list) to stop those from closing it early.
+    const marker = ":".repeat(3 + colonFenceDepth(node));
+
+    state.write("\n" + marker + (node.attrs.style || "info") + "\n");
     state.renderContent(node);
     state.ensureNewLine();
-    state.write(":::");
+    state.write(marker);
     state.closeBlock(node);
   }
 

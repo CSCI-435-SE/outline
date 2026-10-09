@@ -34,6 +34,10 @@ export interface SearchOptions {
   share?: Share;
   /** Limit results to a date range. */
   dateFilter?: DateFilter;
+  /** Only include documents updated at or after this time. */
+  dateFrom?: Date;
+  /** Only include documents updated before this time (exclusive). */
+  dateTo?: Date;
   /** Status of the documents to return. */
   statusFilter?: StatusFilter[];
   /** Limit results to a list of documents. */
