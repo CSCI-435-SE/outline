@@ -23,14 +23,20 @@ export default class RevisionsProcessor extends BaseProcessor {
         }
 
         // Get collaborator IDs since last revision was written.
-        const key = Document.getCollaboratorKey(event.documentId);
-        const collaboratorIds = await Redis.defaultClient.smembers(key);
-        await Redis.defaultClient.del(key);
+const key = Document.getCollaboratorKey(event.documentId);
+const redisCollaboratorIds = await Redis.defaultClient.smembers(key);
+await Redis.defaultClient.del(key);
 
-        const document = await Document.findByPk(event.documentId, {
-          paranoid: false,
-          rejectOnEmpty: true,
-        });
+const document = await Document.findByPk(event.documentId, {
+  paranoid: false,
+  rejectOnEmpty: true,
+});
+
+// Fall back to document's collaboratorIds if Redis key was already cleared
+const collaboratorIds =
+  redisCollaboratorIds.length > 0
+    ? redisCollaboratorIds
+    : (document.collaboratorIds ?? []);
         const previous = await Revision.findLatest(document.id);
 
         // we don't create revisions if identical to previous revision, this can happen if a manual
