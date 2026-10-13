@@ -1,7 +1,7 @@
 /* oxlint-disable no-console */
 /* oxlint-disable @typescript-oxlint/no-var-requires */
 /* oxlint-disable no-undef */
-const { exec } = require("child_process");
+const { execFile } = require("child_process");
 const {
   readdirSync,
   existsSync,
@@ -16,13 +16,14 @@ const getDirectories = (source) =>
     .map((dirent) => dirent.name);
 
 /**
- * Executes a shell command and return it as a Promise.
- * @param cmd {string}
+ * Executes a command with arguments and return it as a Promise.
+ * @param bin {string}
+ * @param args {string[]}
  * @return {Promise<string>}
  */
-function execAsync(cmd) {
+function execAsync(bin, args) {
   return new Promise((resolve, reject) => {
-    exec(cmd, (error, stdout, stderr) => {
+    execFile(bin, args, (error, stdout, stderr) => {
       if (error) {
         reject(error);
       } else {
@@ -44,9 +45,13 @@ async function build() {
   // Compile server and shared
   console.log("Compiling…");
   const swc = (src, out) =>
-    execAsync(
-      `yarn swc "${src}" -d "${out}" --strip-leading-paths --extensions .ts,.tsx --ignore "**/*.test.ts,**/*.test.tsx,**/__mocks__/**" --quiet`
-    );
+    execAsync("yarn", [
+      "swc", src, "-d", out,
+      "--strip-leading-paths",
+      "--extensions", ".ts,.tsx",
+      "--ignore", "**/*.test.ts,**/*.test.tsx,**/__mocks__/**",
+      "--quiet",
+    ]);
 
   await Promise.all([
     swc("./server", "./build/server"),
