@@ -1,5 +1,6 @@
 /* oxlint-disable lines-between-class-members */
 import { compact, isNil, uniq } from "es-toolkit/compat";
+import { Day } from "@shared/utils/time";
 import type {
   Identifier,
   InferAttributes,
@@ -470,13 +471,46 @@ class Document extends ArchivableModel<
     return `/doc/${slugifiedTitle}-${urlId}`;
   }
 
+  /**
+   * Whether the lastEditedAt value stored in the collection structure should be
+   * refreshed after an edit. Limited to once a day so that frequent edits do not
+   * rewrite the structure on every save.
+   *
+   * @param previous The lastEditedAt value before the edit.
+   * @returns True if the structure should be updated.
+   */
+  static shouldRefreshStructureEditDate(previous: Date | null | undefined) {
+    return !previous || Date.now() - new Date(previous).getTime() >= Day.ms;
+  }
+
   // hooks
+
+  // Note: this hook must be declared before updateCollectionStructure and
+  // processUpdate, hooks run in the order they are declared.
+  @BeforeSave
+  static setLastEditedAt(model: Document) {
+    // track content edits separately from updatedAt, which is also bumped by
+    // moves, archiving, and other non-content saves.
+    if (model.isNewRecord) {
+      model.lastEditedAt = model.lastEditedAt ?? new Date();
+    } else if (
+      model.changed("content") ||
+      model.changed("text") ||
+      model.changed("title")
+    ) {
+      model.lastEditedAt = new Date();
+    }
+  }
 
   @BeforeSave
   static async updateCollectionStructure(
     model: Document,
     { transaction }: SaveOptions<InferAttributes<Document>>
   ) {
+    const editDateChanged =
+      model.changed("lastEditedAt") &&
+      Document.shouldRefreshStructureEditDate(model.previous("lastEditedAt"));
+
     // templates, drafts, and archived documents don't appear in the structure
     // and so never need to be updated when the title changes
     if (
@@ -485,7 +519,8 @@ class Document extends ArchivableModel<
       !(
         model.changed("title") ||
         model.changed("icon") ||
-        model.changed("color")
+        model.changed("color") ||
+        editDateChanged
       ) ||
       !model.collectionId
     ) {
@@ -557,19 +592,6 @@ class Document extends ArchivableModel<
     // add the current user as a collaborator on this doc
     if (!model.collaboratorIds) {
       model.collaboratorIds = [];
-    }
-
-    // track content edits separately from updatedAt, which is also bumped by
-    // moves, archiving, and other non-content saves. This must run before the
-    // content backfill below so that backfilling does not count as an edit.
-    if (model.isNewRecord) {
-      model.lastEditedAt = model.lastEditedAt ?? new Date();
-    } else if (
-      model.changed("content") ||
-      model.changed("text") ||
-      model.changed("title")
-    ) {
-      model.lastEditedAt = new Date();
     }
 
     // backfill content if it's missing
@@ -1425,6 +1447,7 @@ class Document extends ArchivableModel<
       url: this.url,
       icon: isNil(this.icon) ? undefined : this.icon,
       color: isNil(this.color) ? undefined : this.color,
+      lastEditedAt: this.lastEditedAt?.toISOString(),
       children,
     };
   };

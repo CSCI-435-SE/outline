@@ -482,6 +482,8 @@ export type NavigationNode = {
   emoji?: string;
   icon?: string;
   color?: string;
+  /** When the content or title of the document was last edited, ISO 8601. */
+  lastEditedAt?: string;
   children: NavigationNode[];
   isDraft?: boolean;
   collectionId?: string;
