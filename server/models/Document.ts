@@ -413,6 +413,12 @@ class Document extends ArchivableModel<
   @Column(DataType.DATE)
   publishedAt: Date | null;
 
+  /** When the content or title of the document was last edited. */
+  @IsDate
+  @Column(DataType.DATE)
+  @SkipChangeset
+  lastEditedAt: Date | null;
+
   /** An array of user IDs that have edited this document. */
   @Column(DataType.ARRAY(DataType.UUID))
   collaboratorIds: string[];
@@ -551,6 +557,19 @@ class Document extends ArchivableModel<
     // add the current user as a collaborator on this doc
     if (!model.collaboratorIds) {
       model.collaboratorIds = [];
+    }
+
+    // track content edits separately from updatedAt, which is also bumped by
+    // moves, archiving, and other non-content saves. This must run before the
+    // content backfill below so that backfilling does not count as an edit.
+    if (model.isNewRecord) {
+      model.lastEditedAt = model.lastEditedAt ?? new Date();
+    } else if (
+      model.changed("content") ||
+      model.changed("text") ||
+      model.changed("title")
+    ) {
+      model.lastEditedAt = new Date();
     }
 
     // backfill content if it's missing
