@@ -14,6 +14,7 @@ import {
   NotificationEventType,
 } from "@shared/types";
 import Storage from "@shared/utils/Storage";
+import { isStale } from "@shared/utils/isStale";
 import { isRTL } from "@shared/utils/rtl";
 import slugify from "@shared/utils/slugify";
 import type DocumentsStore from "~/stores/DocumentsStore";
@@ -60,6 +61,12 @@ export default class Document extends ArchivableModel implements Searchable {
 
   @observable
   lastViewedAt: string | undefined;
+
+  /**
+   * When the content or title of the document was last edited.
+   */
+  @observable
+  lastEditedAt: string | undefined;
 
   /**
    * An optional explanation left by the user who archived the document.
@@ -312,6 +319,17 @@ export default class Document extends ArchivableModel implements Searchable {
     return (
       !this.lastViewedAt &&
       differenceInDays(new Date(), new Date(this.createdAt)) < 14
+    );
+  }
+
+  /**
+   * Whether the document has not been edited recently and may need review.
+   * Drafts and archived documents are never considered stale.
+   */
+  @computed
+  get isStale(): boolean {
+    return (
+      !!this.publishedAt && !this.isArchived && isStale(this.lastEditedAt)
     );
   }
 
@@ -654,6 +672,7 @@ export default class Document extends ArchivableModel implements Searchable {
       title: this.title,
       color: this.color ?? undefined,
       icon: this.icon ?? undefined,
+      lastEditedAt: this.lastEditedAt,
       children: this.childDocuments.map((doc) => doc.asNavigationNode),
       url: this.url,
       isDraft: this.isDraft,

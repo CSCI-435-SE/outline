@@ -41,6 +41,8 @@ export type DocumentRowProps = {
   icon?: React.ReactNode;
   /** Displays a small unread badge to the right of the label. */
   unreadBadge?: boolean;
+  /** Displays a muted indicator that the document has not been edited recently. */
+  staleBadge?: boolean;
 
   /** Whether inline title updates are allowed. */
   canEdit?: boolean;
@@ -122,6 +124,7 @@ function DocumentRow({
   scrollIntoViewIfNeeded,
   icon,
   unreadBadge,
+  staleBadge,
   label,
   canEdit,
   labelText,
@@ -269,6 +272,7 @@ function DocumentRow({
       scrollIntoViewIfNeeded={scrollIntoViewIfNeeded}
       isDraft={isDraft}
       unreadBadge={unreadBadge}
+      staleBadge={staleBadge}
       $showActions={menuOpen}
       menu={menuElement}
     />

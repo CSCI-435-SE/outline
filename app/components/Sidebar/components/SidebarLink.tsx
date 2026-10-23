@@ -1,11 +1,14 @@
 import type { LocationDescriptor } from "history";
+import { ClockIcon } from "outline-icons";
 import * as React from "react";
 import styled, { useTheme, css } from "styled-components";
 import breakpoint from "styled-components-breakpoint";
 import EventBoundary from "@shared/components/EventBoundary";
 import { ellipsis, hover, s } from "@shared/styles";
 import { isMobile } from "@shared/utils/browser";
+import { STALE_DOCUMENT_THRESHOLD_DAYS } from "@shared/utils/isStale";
 import NudeButton from "~/components/NudeButton";
+import Tooltip from "~/components/Tooltip";
 import { UnreadBadge } from "~/components/UnreadBadge";
 import useClickIntent from "~/hooks/useClickIntent";
 import { undraggableOnDesktop } from "~/styles";
@@ -39,6 +42,8 @@ type Props = Omit<NavLinkProps, "to"> & {
   menu?: React.ReactNode;
   /** Whether to show an unread badge indicator */
   unreadBadge?: boolean;
+  /** Whether to show an indicator that the document has not been edited recently */
+  staleBadge?: boolean;
   /** Whether to show action buttons on hover */
   $showActions?: boolean;
   /** Whether the link is disabled and non-interactive */
@@ -92,6 +97,7 @@ function SidebarLink(
     onDisclosureClick,
     disabled,
     unreadBadge,
+    staleBadge,
     contextAction,
     ellipsis = true,
     ...rest
@@ -148,6 +154,9 @@ function SidebarLink(
   );
 
   const DisclosureComponent = icon ? HiddenDisclosure : Disclosure;
+  const staleLabel = t("Not edited in the last {{ days }} days", {
+    days: STALE_DOCUMENT_THRESHOLD_DAYS,
+  });
 
   const innerContent = (
     <>
@@ -164,6 +173,13 @@ function SidebarLink(
           {icon && <IconWrapper aria-hidden>{icon}</IconWrapper>}
           <Label $ellipsis={ellipsis}>{label}</Label>
           {unreadBadge && <UnreadBadge style={unreadStyle} />}
+          {staleBadge && !unreadBadge && (
+            <Tooltip content={staleLabel}>
+              <StaleIndicator aria-label={staleLabel}>
+                <ClockIcon size={18} />
+              </StaleIndicator>
+            </Tooltip>
+          )}
         </Content>
       </ContextMenu>
       {menu && <Actions $showActions={$showActions}>{menu}</Actions>}
@@ -224,6 +240,19 @@ export const IconWrapper = styled.span`
   overflow: hidden;
   flex-shrink: 0;
   transition: opacity 200ms ease-in-out;
+`;
+
+const StaleIndicator = styled.span`
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 24px;
+  margin-inline-start: 4px;
+
+  svg {
+    fill: ${s("textTertiary")};
+    opacity: 0.75;
+  }
 `;
 
 const Content = styled.span`

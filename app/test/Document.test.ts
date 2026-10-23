@@ -63,4 +63,78 @@ describe("Document model", () => {
       expect(document.isBadgedNew).toBe(true);
     });
   });
+
+  describe("isStale", () => {
+    const daysAgo = (days: number) => {
+      const date = new Date();
+      date.setDate(date.getDate() - days);
+      return date.toISOString();
+    };
+
+    test("should be stale when a published document has not been edited in 90 days", () => {
+      const document = new Document(
+        {
+          id: "stale-1",
+          title: "Test",
+          publishedAt: daysAgo(200),
+          lastEditedAt: daysAgo(91),
+        },
+        documents
+      );
+      expect(document.isStale).toBe(true);
+    });
+
+    test("should not be stale when recently edited", () => {
+      const document = new Document(
+        {
+          id: "stale-2",
+          title: "Test",
+          publishedAt: daysAgo(200),
+          lastEditedAt: daysAgo(1),
+        },
+        documents
+      );
+      expect(document.isStale).toBe(false);
+    });
+
+    test("should not be stale for drafts", () => {
+      const document = new Document(
+        {
+          id: "stale-3",
+          title: "Test",
+          publishedAt: undefined,
+          lastEditedAt: daysAgo(91),
+        },
+        documents
+      );
+      expect(document.isStale).toBe(false);
+    });
+
+    test("should not be stale for archived documents", () => {
+      const document = new Document(
+        {
+          id: "stale-4",
+          title: "Test",
+          publishedAt: daysAgo(200),
+          archivedAt: daysAgo(10),
+          lastEditedAt: daysAgo(91),
+        },
+        documents
+      );
+      expect(document.isStale).toBe(false);
+    });
+
+    test("should not be stale when the edit date is unknown", () => {
+      const document = new Document(
+        {
+          id: "stale-5",
+          title: "Test",
+          publishedAt: daysAgo(200),
+          lastEditedAt: undefined,
+        },
+        documents
+      );
+      expect(document.isStale).toBe(false);
+    });
+  });
 });
