@@ -1,4 +1,5 @@
 import Document from "~/models/Document";
+import { STALE_DOCUMENT_THRESHOLD_DAYS } from "@shared/utils/isStale";
 import stores from "~/stores";
 
 describe("Document model", () => {
@@ -61,6 +62,80 @@ describe("Document model", () => {
         documents
       );
       expect(document.isBadgedNew).toBe(true);
+    });
+  });
+
+  describe("isStale", () => {
+    const daysAgo = (days: number) => {
+      const date = new Date();
+      date.setDate(date.getDate() - days);
+      return date.toISOString();
+    };
+
+    test("should be stale when a published document has not been edited within the threshold", () => {
+      const document = new Document(
+        {
+          id: "stale-1",
+          title: "Test",
+          publishedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 100),
+          lastEditedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 1),
+        },
+        documents
+      );
+      expect(document.isStale).toBe(true);
+    });
+
+    test("should not be stale when recently edited", () => {
+      const document = new Document(
+        {
+          id: "stale-2",
+          title: "Test",
+          publishedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 100),
+          lastEditedAt: daysAgo(1),
+        },
+        documents
+      );
+      expect(document.isStale).toBe(false);
+    });
+
+    test("should not be stale for drafts", () => {
+      const document = new Document(
+        {
+          id: "stale-3",
+          title: "Test",
+          publishedAt: undefined,
+          lastEditedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 1),
+        },
+        documents
+      );
+      expect(document.isStale).toBe(false);
+    });
+
+    test("should not be stale for archived documents", () => {
+      const document = new Document(
+        {
+          id: "stale-4",
+          title: "Test",
+          publishedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 100),
+          archivedAt: daysAgo(10),
+          lastEditedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 1),
+        },
+        documents
+      );
+      expect(document.isStale).toBe(false);
+    });
+
+    test("should not be stale when the edit date is unknown", () => {
+      const document = new Document(
+        {
+          id: "stale-5",
+          title: "Test",
+          publishedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 100),
+          lastEditedAt: undefined,
+        },
+        documents
+      );
+      expect(document.isStale).toBe(false);
     });
   });
 });

@@ -6,7 +6,7 @@ import * as Y from "yjs";
 import type { ProsemirrorData } from "@shared/types";
 import { schema } from "@server/editor";
 import Logger from "@server/logging/Logger";
-import { Document, Event } from "@server/models";
+import { Collection, Document, Event } from "@server/models";
 import { sequelize } from "@server/storage/database";
 import { AuthenticationType } from "@server/types";
 import semver from "semver";
@@ -31,7 +31,7 @@ export default async function documentCollaborativeUpdater({
   isLastConnection,
   clientVersion,
 }: Props) {
-  return sequelize.transaction(async (transaction) => {
+  const updated = await sequelize.transaction(async (transaction) => {
     await sequelize.query(`SET LOCAL lock_timeout = '15s';`, {
       transaction,
     });
@@ -68,7 +68,7 @@ export default async function documentCollaborativeUpdater({
         document.lastModifiedById);
 
     if (isUnchanged) {
-      return;
+      return null;
     }
 
     Logger.info(
@@ -96,6 +96,9 @@ export default async function documentCollaborativeUpdater({
           ? clientVersion
           : document.editorVersion;
 
+    // set explicitly as hooks are disabled below
+    const previousLastEditedAt = document.lastEditedAt;
+
     await document.update(
       {
         content,
@@ -103,6 +106,7 @@ export default async function documentCollaborativeUpdater({
         lastModifiedById,
         collaboratorIds,
         editorVersion,
+        lastEditedAt: new Date(),
       },
       {
         transaction,
@@ -125,5 +129,31 @@ export default async function documentCollaborativeUpdater({
         done: isLastConnection,
       },
     });
+
+    return { document, previousLastEditedAt };
   });
+
+  if (!updated) {
+    return;
+  }
+
+  // Refresh lastEditedAt in the collection structure, at most once a day. This
+  // runs in a separate transaction so that the document row lock is not held
+  // while waiting on the collection lock.
+  const { document, previousLastEditedAt } = updated;
+  if (
+    document.publishedAt &&
+    !document.archivedAt &&
+    document.collectionId &&
+    Document.shouldRefreshStructureEditDate(previousLastEditedAt)
+  ) {
+    await sequelize.transaction(async (transaction) => {
+      const collection = await Collection.findByPk(document.collectionId!, {
+        includeDocumentStructure: true,
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+      await collection?.updateDocument(document, { transaction });
+    });
+  }
 }

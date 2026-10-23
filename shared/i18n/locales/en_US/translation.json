@@ -531,6 +531,7 @@
   "Shared with me": "Shared with me",
   "Show more": "Show more",
   "Link options": "Link options",
+  "Not edited in the last {{ days }} days": "Not edited in the last {{ days }} days",
   "Could not load starred documents": "Could not load starred documents",
   "Starred": "Starred",
   "Up to date": "Up to date",
