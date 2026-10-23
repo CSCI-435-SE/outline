@@ -157,6 +157,14 @@ function SidebarLink(
   const staleLabel = t("Not edited in the last {{ days }} days", {
     days: STALE_DOCUMENT_THRESHOLD_DAYS,
   });
+  const staleIndicator =
+    staleBadge && !unreadBadge ? (
+      <Tooltip content={staleLabel}>
+        <StaleIndicator aria-label={staleLabel}>
+          <ClockIcon size={18} />
+        </StaleIndicator>
+      </Tooltip>
+    ) : null;
 
   const innerContent = (
     <>
@@ -173,16 +181,16 @@ function SidebarLink(
           {icon && <IconWrapper aria-hidden>{icon}</IconWrapper>}
           <Label $ellipsis={ellipsis}>{label}</Label>
           {unreadBadge && <UnreadBadge style={unreadStyle} />}
-          {staleBadge && !unreadBadge && (
-            <Tooltip content={staleLabel}>
-              <StaleIndicator aria-label={staleLabel}>
-                <ClockIcon size={18} />
-              </StaleIndicator>
-            </Tooltip>
-          )}
+          {staleIndicator}
         </Content>
       </ContextMenu>
-      {menu && <Actions $showActions={$showActions}>{menu}</Actions>}
+      {menu && (
+        <Actions $showActions={$showActions}>
+          {/* repeated here as the actions cover the indicator on hover */}
+          {staleIndicator}
+          {menu}
+        </Actions>
+      )}
     </>
   );
 
