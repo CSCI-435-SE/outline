@@ -1,4 +1,5 @@
 import Document from "~/models/Document";
+import { STALE_DOCUMENT_THRESHOLD_DAYS } from "@shared/utils/isStale";
 import stores from "~/stores";
 
 describe("Document model", () => {
@@ -71,13 +72,13 @@ describe("Document model", () => {
       return date.toISOString();
     };
 
-    test("should be stale when a published document has not been edited in 90 days", () => {
+    test("should be stale when a published document has not been edited within the threshold", () => {
       const document = new Document(
         {
           id: "stale-1",
           title: "Test",
-          publishedAt: daysAgo(200),
-          lastEditedAt: daysAgo(91),
+          publishedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 100),
+          lastEditedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 1),
         },
         documents
       );
@@ -89,7 +90,7 @@ describe("Document model", () => {
         {
           id: "stale-2",
           title: "Test",
-          publishedAt: daysAgo(200),
+          publishedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 100),
           lastEditedAt: daysAgo(1),
         },
         documents
@@ -103,7 +104,7 @@ describe("Document model", () => {
           id: "stale-3",
           title: "Test",
           publishedAt: undefined,
-          lastEditedAt: daysAgo(91),
+          lastEditedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 1),
         },
         documents
       );
@@ -115,9 +116,9 @@ describe("Document model", () => {
         {
           id: "stale-4",
           title: "Test",
-          publishedAt: daysAgo(200),
+          publishedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 100),
           archivedAt: daysAgo(10),
-          lastEditedAt: daysAgo(91),
+          lastEditedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 1),
         },
         documents
       );
@@ -129,7 +130,7 @@ describe("Document model", () => {
         {
           id: "stale-5",
           title: "Test",
-          publishedAt: daysAgo(200),
+          publishedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 100),
           lastEditedAt: undefined,
         },
         documents
