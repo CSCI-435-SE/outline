@@ -68,6 +68,10 @@ function Details() {
     team.getPreference(TeamPreference.TocPosition) as TOCPosition
   );
 
+  const [stalenessThreshold, setStalenessThreshold] = useState(
+    (team.getPreference(TeamPreference.StalenessThreshold) as number | undefined) ?? 180
+  );
+
   const tocPositionOptions: Option[] = React.useMemo(
     () =>
       [
@@ -106,6 +110,7 @@ function Details() {
             publicBranding,
             customTheme,
             tocPosition,
+            [TeamPreference.StalenessThreshold]: stalenessThreshold,
           },
         });
         toast.success(t("Settings saved"));
@@ -357,6 +362,26 @@ function Details() {
               onSelectCollection={onSelectCollection}
               defaultCollectionId={defaultCollectionId}
             />
+          </SettingRow>
+          <SettingRow
+            label={t("Document staleness threshold")}
+            name="stalenessThreshold"
+            description={t(
+              "Number of days without an edit before a document is flagged as stale in the sidebar."
+            )}
+          >
+            <Input
+              id="stalenessThreshold"
+              value={String(stalenessThreshold)}
+              onChange={(ev: React.ChangeEvent<HTMLInputElement>) => {
+                const val = parseInt(ev.target.value, 10);
+                if (!isNaN(val) && val > 0) {
+                  setStalenessThreshold(val);
+                }
+             }}
+            pattern="[0-9]*"
+            placeholder="180"
+          />
           </SettingRow>
           <SettingRow
             border={false}
