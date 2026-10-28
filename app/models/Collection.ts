@@ -237,7 +237,8 @@ export default class Collection extends ParanoidModel {
    */
   @action
   updateDocument(
-    document: Pick<Document, "id" | "title" | "url" | "color" | "icon">
+    document: Pick<Document, "id" | "title" | "url" | "color" | "icon"> &
+      Partial<Pick<Document, "lastEditedAt">>
   ) {
     if (!this.documents) {
       return;
@@ -250,6 +251,9 @@ export default class Collection extends ParanoidModel {
           node.icon = document.icon ?? undefined;
           node.title = document.title;
           node.url = document.url;
+          if (document.lastEditedAt) {
+            node.lastEditedAt = document.lastEditedAt;
+          }
         } else {
           travelNodes(node.children);
         }
