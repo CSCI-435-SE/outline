@@ -6649,4 +6649,21 @@ describe("review workflow", () => {
     expect(body.data.reviewStatus).toBeUndefined();
     expect(body.data.reviewerId).toBeUndefined();
   });
+
+  it("should restore review fields when the workflow is re-enabled", async () => {
+    const { team, author, reviewer, document } = await buildReviewSetup();
+    await requestReview(author, document.id, reviewer.id);
+    team.setPreference(TeamPreference.ReviewWorkflow, false);
+    await team.save();
+    team.setPreference(TeamPreference.ReviewWorkflow, true);
+    await team.save();
+
+    const res = await server.post("/api/documents.info", author, {
+      body: { id: document.id },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.reviewStatus).toEqual(DocumentReviewStatus.InReview);
+    expect(body.data.reviewerId).toEqual(reviewer.id);
+  });
 });

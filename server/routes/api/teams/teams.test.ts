@@ -53,6 +53,18 @@ describe("#team.update", () => {
     expect(body.data.name).toEqual(name);
   });
 
+  it("should enable the review workflow", async () => {
+    const admin = await buildAdmin();
+    const res = await server.post("/api/team.update", admin, {
+      body: {
+        preferences: { reviewWorkflow: true },
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.preferences.reviewWorkflow).toEqual(true);
+  });
+
   it("should add avatar", async () => {
     const team = await buildTeam();
     const admin = await buildAdmin({ teamId: team.id });

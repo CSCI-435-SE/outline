@@ -75,6 +75,8 @@ export const TeamsUpdateSchema = BaseSchema.extend({
         mcp: z.boolean().optional(),
         /** List of disabled embed provider titles. */
         disabledEmbeds: z.array(z.string()).optional(),
+        /** Whether the document review workflow is enabled. */
+        reviewWorkflow: z.boolean().optional(),
       })
       .optional(),
   }),
