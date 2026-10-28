@@ -68,9 +68,10 @@ function Details() {
     team.getPreference(TeamPreference.TocPosition) as TOCPosition
   );
 
-  const [stalenessThreshold, setStalenessThreshold] = useState(
-    (team.getPreference(TeamPreference.StalenessThreshold) as number | undefined) ?? 180
-  );
+  const [stalenessThreshold, setStalenessThreshold] = useState(() => {
+    const val = team.getPreference(TeamPreference.StalenessThreshold);
+    return String(typeof val === "number" ? val : 180);
+  });
 
   const tocPositionOptions: Option[] = React.useMemo(
     () =>
@@ -100,6 +101,10 @@ function Details() {
       }
 
       try {
+        team.setPreference(
+          TeamPreference.StalenessThreshold,
+          parseInt(stalenessThreshold, 10) || 180
+        );
         await team.save({
           name,
           description,
@@ -110,7 +115,6 @@ function Details() {
             publicBranding,
             customTheme,
             tocPosition,
-            [TeamPreference.StalenessThreshold]: stalenessThreshold,
           },
         });
         toast.success(t("Settings saved"));
@@ -120,6 +124,7 @@ function Details() {
     },
     [
       tocPosition,
+      stalenessThreshold,
       team,
       name,
       description,
@@ -372,16 +377,12 @@ function Details() {
           >
             <Input
               id="stalenessThreshold"
-              value={String(stalenessThreshold)}
+              value={stalenessThreshold}
               onChange={(ev: React.ChangeEvent<HTMLInputElement>) => {
-                const val = parseInt(ev.target.value, 10);
-                if (!isNaN(val) && val > 0) {
-                  setStalenessThreshold(val);
-                }
-             }}
-            pattern="[0-9]*"
-            placeholder="180"
-          />
+                setStalenessThreshold(ev.target.value);
+              }}
+              placeholder="180"
+            />
           </SettingRow>
           <SettingRow
             border={false}
