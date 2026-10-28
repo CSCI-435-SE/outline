@@ -63,7 +63,7 @@ export type CredentialPattern = {
     },
     {
       name: "Google API Key",
-      pattern: /\bAIza[A-Za-z0-9_\-]{35}\b/,
+      pattern: /\bAIza[A-Za-z0-9_-]{35}\b/,
     },
     {
       name: "Bearer Token",
