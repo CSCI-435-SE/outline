@@ -231,6 +231,13 @@ export enum DocumentPermission {
   Admin = "admin",
 }
 
+export enum DocumentReviewStatus {
+  Draft = "draft",
+  InReview = "in_review",
+  ChangesRequested = "changes_requested",
+  Approved = "approved",
+}
+
 export enum GroupPermission {
   Member = "member",
   Admin = "admin",
@@ -449,6 +456,8 @@ export enum TeamPreference {
   MCP = "mcp",
   /** List of disabled embed provider titles. */
   DisabledEmbeds = "disabledEmbeds",
+  /** Whether the document review workflow is enabled. */
+  ReviewWorkflow = "reviewWorkflow",
 }
 
 export type TeamPreferences = {
@@ -466,6 +475,7 @@ export type TeamPreferences = {
   [TeamPreference.EmailDisplay]?: EmailDisplay;
   [TeamPreference.MCP]?: boolean;
   [TeamPreference.DisabledEmbeds]?: string[];
+  [TeamPreference.ReviewWorkflow]?: boolean;
 };
 
 export enum NavigationNodeType {

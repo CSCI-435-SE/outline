@@ -40,6 +40,7 @@ import {
   Unique,
   AfterUpdate,
   IsFloat,
+  IsIn,
 } from "sequelize-typescript";
 import { MaxLength } from "class-validator";
 import isUUID from "validator/lib/isUUID";
@@ -50,6 +51,7 @@ import type {
   ProsemirrorData,
   SourceMetadata,
 } from "@shared/types";
+import { DocumentReviewStatus } from "@shared/types";
 import { ProsemirrorHelper } from "@shared/utils/ProsemirrorHelper";
 import { UrlHelper } from "@shared/utils/UrlHelper";
 import slugify from "@shared/utils/slugify";
@@ -320,6 +322,13 @@ class Document extends ArchivableModel<
   @Column(DataType.TEXT)
   @SkipChangeset
   archivedReason: string | null;
+
+  /** The document's position in the review workflow, null if never reviewed. */
+  @AllowNull
+  @IsIn([Object.values(DocumentReviewStatus)])
+  @Column(DataType.STRING)
+  @SkipChangeset
+  reviewStatus: DocumentReviewStatus | null;
 
   @Column(DataType.ARRAY(DataType.STRING))
   previousTitles: string[];
@@ -664,6 +673,22 @@ class Document extends ArchivableModel<
   @ForeignKey(() => User)
   @Column(DataType.UUID)
   createdById: string;
+
+  @BelongsTo(() => User, "reviewerId")
+  reviewer: User | null;
+
+  @ForeignKey(() => User)
+  @Column(DataType.UUID)
+  @SkipChangeset
+  reviewerId: string | null;
+
+  @BelongsTo(() => User, "reviewRequestedById")
+  reviewRequestedBy: User | null;
+
+  @ForeignKey(() => User)
+  @Column(DataType.UUID)
+  @SkipChangeset
+  reviewRequestedById: string | null;
 
   @ForeignKey(() => Template)
   @Column(DataType.UUID)
