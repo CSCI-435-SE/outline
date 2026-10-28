@@ -47,11 +47,11 @@ export type CredentialPattern = {
     },
     {
       name: "Generic API Key",
-      pattern: /\bapi[_-]?key\s*[:=]\s*['"]?[A-Za-z0-9_\-]{16,}['"]?/i,
+      pattern: /\bapi[_-]?key\s*[:=]\s*['"]?[A-Za-z0-9_-]{16,}['"]?/i,
     },
     {
       name: "Generic Secret",
-      pattern: /\bsecret[_-]?key\s*[:=]\s*['"]?[A-Za-z0-9_\-]{16,}['"]?/i,
+      pattern: /\bsecret[_-]?key\s*[:=]\s*['"]?[A-Za-z0-9_-]{16,}['"]?/i,
     },
     {
       name: "Database Connection String",
@@ -67,7 +67,7 @@ export type CredentialPattern = {
     },
     {
       name: "Bearer Token",
-      pattern: /\bBearer\s+[A-Za-z0-9\-._~+/]+=*\b/i,
+      pattern: /\bBearer\s+[A-Za-z0-9._~+/-]+=*\b/i,
     },
   ];
   
