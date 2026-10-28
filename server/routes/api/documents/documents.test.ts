@@ -6,7 +6,9 @@ import FormData from "form-data";
 import {
   CollectionPermission,
   DocumentPermission,
+  DocumentReviewStatus,
   StatusFilter,
+  TeamPreference,
   UserRole,
 } from "@shared/types";
 import { TextHelper } from "@shared/utils/TextHelper";
@@ -6401,5 +6403,250 @@ describe("#documents.documents", () => {
 
     expect(res.status).toBe(403);
     expect(body).toMatchSnapshot();
+  });
+});
+
+describe("review workflow", () => {
+  async function buildReviewSetup() {
+    const team = await buildTeam();
+    team.setPreference(TeamPreference.ReviewWorkflow, true);
+    await team.save();
+    const author = await buildUser({ teamId: team.id });
+    const reviewer = await buildUser({ teamId: team.id });
+    const document = await buildDocument({
+      userId: author.id,
+      teamId: team.id,
+    });
+    return { team, author, reviewer, document };
+  }
+
+  function requestReview(user: User, id: string, reviewerId: string) {
+    return server.post("/api/documents.request_review", user, {
+      body: { id, reviewerId },
+    });
+  }
+
+  describe("#documents.request_review", () => {
+    it("should require reviewerId", async () => {
+      const { author, document } = await buildReviewSetup();
+      const res = await server.post("/api/documents.request_review", author, {
+        body: { id: document.id },
+      });
+      expect(res.status).toEqual(400);
+    });
+
+    it("should request a review", async () => {
+      const { author, reviewer, document } = await buildReviewSetup();
+      const res = await requestReview(author, document.id, reviewer.id);
+      const body = await res.json();
+
+      expect(res.status).toEqual(200);
+      expect(body.data.reviewStatus).toEqual(DocumentReviewStatus.InReview);
+      expect(body.data.reviewerId).toEqual(reviewer.id);
+      expect(body.data.reviewRequestedById).toEqual(author.id);
+
+      const event = await Event.findOne({
+        where: { name: "documents.review_requested", documentId: document.id },
+      });
+      expect(event?.data).toEqual({
+        reviewerId: reviewer.id,
+        previousReviewerId: null,
+      });
+    });
+
+    it("should fail when the review workflow is disabled", async () => {
+      const { team, author, reviewer, document } = await buildReviewSetup();
+      team.setPreference(TeamPreference.ReviewWorkflow, false);
+      await team.save();
+
+      const res = await requestReview(author, document.id, reviewer.id);
+      expect(res.status).toEqual(403);
+    });
+
+    it("should not allow users who cannot edit the document", async () => {
+      const { team, reviewer, document } = await buildReviewSetup();
+      const viewer = await buildViewer({ teamId: team.id });
+
+      const res = await requestReview(viewer, document.id, reviewer.id);
+      expect(res.status).toEqual(403);
+    });
+
+    it("should not allow requesting a review from yourself", async () => {
+      const { author, document } = await buildReviewSetup();
+      const res = await requestReview(author, document.id, author.id);
+      const body = await res.json();
+
+      expect(res.status).toEqual(400);
+      expect(body.message).toEqual("You cannot review your own request");
+    });
+
+    it("should not allow a reviewer from another team", async () => {
+      const { author, document } = await buildReviewSetup();
+      const outsider = await buildUser();
+
+      const res = await requestReview(author, document.id, outsider.id);
+      expect(res.status).toEqual(403);
+    });
+
+    it("should replace an existing reviewer", async () => {
+      const { team, author, reviewer, document } = await buildReviewSetup();
+      const newReviewer = await buildUser({ teamId: team.id });
+      await requestReview(author, document.id, reviewer.id);
+
+      const res = await requestReview(author, document.id, newReviewer.id);
+      const body = await res.json();
+      expect(res.status).toEqual(200);
+      expect(body.data.reviewerId).toEqual(newReviewer.id);
+
+      const event = await Event.findOne({
+        where: { name: "documents.review_requested", documentId: document.id },
+        order: [["createdAt", "DESC"]],
+      });
+      expect(event?.data).toEqual({
+        reviewerId: newReviewer.id,
+        previousReviewerId: reviewer.id,
+      });
+
+      const approveRes = await server.post("/api/documents.approve", reviewer, {
+        body: { id: document.id },
+      });
+      expect(approveRes.status).toEqual(403);
+    });
+
+    it("should allow reviewing a draft the reviewer can access", async () => {
+      const { team, author, reviewer } = await buildReviewSetup();
+      const collection = await buildCollection({
+        userId: author.id,
+        teamId: team.id,
+      });
+      const draft = await buildDraftDocument({
+        userId: author.id,
+        teamId: team.id,
+        collectionId: collection.id,
+      });
+
+      const res = await requestReview(author, draft.id, reviewer.id);
+      expect(res.status).toEqual(200);
+    });
+
+    it("should require a draft to be shared with the reviewer first", async () => {
+      const { team, author, reviewer } = await buildReviewSetup();
+      const draft = await buildDraftDocument({
+        userId: author.id,
+        teamId: team.id,
+        collectionId: null,
+      });
+
+      const res = await requestReview(author, draft.id, reviewer.id);
+      const body = await res.json();
+      expect(res.status).toEqual(400);
+      expect(body.message).toEqual(
+        "Share this document with the reviewer first"
+      );
+
+      await UserMembership.create({
+        userId: reviewer.id,
+        documentId: draft.id,
+        permission: DocumentPermission.Read,
+        createdById: author.id,
+      });
+
+      const sharedRes = await requestReview(author, draft.id, reviewer.id);
+      expect(sharedRes.status).toEqual(200);
+    });
+  });
+
+  describe("#documents.approve", () => {
+    it("should approve a document in review", async () => {
+      const { author, reviewer, document } = await buildReviewSetup();
+      await requestReview(author, document.id, reviewer.id);
+
+      const res = await server.post("/api/documents.approve", reviewer, {
+        body: { id: document.id },
+      });
+      const body = await res.json();
+      expect(res.status).toEqual(200);
+      expect(body.data.reviewStatus).toEqual(DocumentReviewStatus.Approved);
+    });
+
+    it("should not allow users other than the reviewer", async () => {
+      const { author, reviewer, document } = await buildReviewSetup();
+      await requestReview(author, document.id, reviewer.id);
+
+      const res = await server.post("/api/documents.approve", author, {
+        body: { id: document.id },
+      });
+      expect(res.status).toEqual(403);
+    });
+
+    it("should not approve a document that is not in review", async () => {
+      const { author, reviewer, document } = await buildReviewSetup();
+      await requestReview(author, document.id, reviewer.id);
+      await server.post("/api/documents.approve", reviewer, {
+        body: { id: document.id },
+      });
+
+      const res = await server.post("/api/documents.approve", reviewer, {
+        body: { id: document.id },
+      });
+      expect(res.status).toEqual(403);
+    });
+
+    it("should fail when the review workflow is disabled", async () => {
+      const { team, author, reviewer, document } = await buildReviewSetup();
+      await requestReview(author, document.id, reviewer.id);
+      team.setPreference(TeamPreference.ReviewWorkflow, false);
+      await team.save();
+
+      const res = await server.post("/api/documents.approve", reviewer, {
+        body: { id: document.id },
+      });
+      expect(res.status).toEqual(403);
+    });
+  });
+
+  describe("#documents.request_changes", () => {
+    it("should request changes on a document in review", async () => {
+      const { author, reviewer, document } = await buildReviewSetup();
+      await requestReview(author, document.id, reviewer.id);
+
+      const res = await server.post(
+        "/api/documents.request_changes",
+        reviewer,
+        {
+          body: { id: document.id },
+        }
+      );
+      const body = await res.json();
+      expect(res.status).toEqual(200);
+      expect(body.data.reviewStatus).toEqual(
+        DocumentReviewStatus.ChangesRequested
+      );
+    });
+
+    it("should not allow users other than the reviewer", async () => {
+      const { author, reviewer, document } = await buildReviewSetup();
+      await requestReview(author, document.id, reviewer.id);
+
+      const res = await server.post("/api/documents.request_changes", author, {
+        body: { id: document.id },
+      });
+      expect(res.status).toEqual(403);
+    });
+  });
+
+  it("should hide review fields when the workflow is disabled", async () => {
+    const { team, author, reviewer, document } = await buildReviewSetup();
+    await requestReview(author, document.id, reviewer.id);
+    team.setPreference(TeamPreference.ReviewWorkflow, false);
+    await team.save();
+
+    const res = await server.post("/api/documents.info", author, {
+      body: { id: document.id },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.reviewStatus).toBeUndefined();
+    expect(body.data.reviewerId).toBeUndefined();
   });
 });

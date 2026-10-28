@@ -1284,6 +1284,47 @@ class Document extends ArchivableModel<
     return this;
   };
 
+  /**
+   * Request a review of this document, replacing any existing reviewer.
+   *
+   * @param ctx The API context, the authenticated user is the requester.
+   * @param reviewer The user being asked to review the document.
+   * @returns The updated document.
+   */
+  requestReviewWithCtx = async (ctx: APIContext, reviewer: User) => {
+    const previousReviewerId = this.reviewerId ?? null;
+    this.reviewStatus = DocumentReviewStatus.InReview;
+    this.reviewerId = reviewer.id;
+    this.reviewRequestedById = ctx.state.auth.user.id;
+
+    return this.saveWithCtx(ctx, undefined, {
+      name: "review_requested",
+      data: { reviewerId: reviewer.id, previousReviewerId },
+    });
+  };
+
+  /**
+   * Record the reviewer's decision on a document that is in review.
+   *
+   * @param ctx The API context, the authenticated user is the reviewer.
+   * @param approved Whether the reviewer approved or requested changes.
+   * @returns The updated document.
+   */
+  completeReviewWithCtx = async (ctx: APIContext, approved: boolean) => {
+    if (this.reviewStatus !== DocumentReviewStatus.InReview) {
+      throw ValidationError("Document is not in review");
+    }
+
+    this.reviewStatus = approved
+      ? DocumentReviewStatus.Approved
+      : DocumentReviewStatus.ChangesRequested;
+
+    return this.saveWithCtx(ctx, undefined, {
+      name: approved ? "review_approved" : "review_changes_requested",
+      data: { reviewerId: this.reviewerId },
+    });
+  };
+
   // Restore an archived document back to being visible to the team
   restoreTo = async (
     ctx: APIContext,
