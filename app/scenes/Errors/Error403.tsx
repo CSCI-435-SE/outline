@@ -16,9 +16,11 @@ import { client } from "~/utils/ApiClient";
 type Props = {
   /** The document ID to request access to. */
   documentId?: string;
+  /** Whether the inaccessible resource is a collection rather than a document. */
+  isCollection?: boolean;
 };
 
-const Error403 = ({ documentId }: Props) => {
+const Error403 = ({ documentId, isCollection }: Props) => {
   const { t } = useTranslation();
   const location = useLocation<{ title?: string }>();
   const history = useHistory();
@@ -70,9 +72,13 @@ const Error403 = ({ documentId }: Props) => {
     return <Loading location={location} />;
   }
 
+  const title = isCollection
+    ? t("No access to this collection")
+    : t("No access to this doc");
+
   return (
-    <Scene title={t("No access to this doc")}>
-      <Heading>{t("No access to this doc")}</Heading>
+    <Scene title={title}>
+      <Heading>{title}</Heading>
       <VStack spacing={20} style={{ maxWidth: 500 }} align="initial">
         {requested ? (
           <Empty size="large">
@@ -82,9 +88,13 @@ const Error403 = ({ documentId }: Props) => {
           </Empty>
         ) : (
           <Empty size="large">
-            {t(
-              "It doesn't look like you have permission to access this document. You can request access."
-            )}
+            {isCollection
+              ? t(
+                  "It doesn't look like you have permission to access this collection."
+                )
+              : t(
+                  "It doesn't look like you have permission to access this document. You can request access."
+                )}
           </Empty>
         )}
         <HStack gap={8}>
