@@ -621,8 +621,11 @@ function SuggestionsMenu<T extends MenuItem>(props: Props<T>) {
         return false;
       }
 
-      // If no image upload callback has been passed, filter the image block out
-      if (!uploadFile && item.name === "image") {
+      // If no image upload callback has been passed, filter the image blocks out
+      if (
+        !uploadFile &&
+        (item.name === "image" || item.name === "uploadSlideshow")
+      ) {
         return false;
       }
 
