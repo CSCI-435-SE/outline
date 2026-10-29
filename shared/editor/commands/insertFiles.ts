@@ -7,6 +7,10 @@ import FileHelper from "../lib/FileHelper";
 import uploadPlaceholderPlugin, {
   findPlaceholder,
 } from "../lib/uploadPlaceholder";
+import {
+  imageRowLayoutClass,
+  prepareImageRow,
+} from "../plugins/SideBySideImagesPlugin";
 
 export type Options = {
   /** Set to true to force images and videos to become file attachments */
@@ -114,15 +118,31 @@ const insertFiles = async function (
     return;
   }
 
+  // multiple images inserted together are placed side by side in a row
+  const rowPos =
+    filesToUpload.length > 1 &&
+    filesToUpload.every((upload) => upload.isImage) &&
+    !options.replaceExisting &&
+    !options.attrs?.layoutClass
+      ? prepareRow(view, pos)
+      : undefined;
+  const isRow = rowPos !== undefined;
+  const rowAttrs = isRow ? { layoutClass: imageRowLayoutClass } : undefined;
+
+  // images in a row are inserted in the order they were selected, so each one
+  // waits for the image before it even though the uploads run in parallel.
+  let previousInsert: Promise<unknown> = Promise.resolve();
+
   // the user might have dropped multiple files at once, we need to loop
   for (const upload of filesToUpload) {
     const { tr } = view.state;
 
     tr.setMeta(uploadPlaceholderPlugin, {
       add: {
-        pos,
+        pos: rowPos ?? pos,
         ...upload,
         replaceExisting: options.replaceExisting,
+        rowSize: isRow ? filesToUpload.length : undefined,
       },
     });
     view.dispatch(tr);
@@ -130,49 +150,51 @@ const insertFiles = async function (
     // start uploading the file to the server. Using "then" syntax
     // to allow all placeholders to be entered at once with the uploads
     // happening in the background in parallel.
-    uploadFile?.(upload.file, {
+    const uploading = uploadFile?.(upload.file, {
       id: upload.id,
       onProgress: (progress) => onFileUploadProgress?.(upload.id, progress),
-    })
+    });
+    if (!uploading) {
+      continue;
+    }
+
+    const inserting = Promise.all([
+      uploading,
+      isRow ? previousInsert : undefined,
+    ])
       // then this should be able to get the full URL as well
-      .then(async (src) => {
+      .then(async ([src]) => {
         if (view.isDestroyed) {
           return;
         }
         if (upload.isImage) {
-          const newImg = new Image();
-          newImg.onload = async () => {
-            const result = findPlaceholder(view.state, upload.id);
-            if (result === null) {
-              return;
-            }
+          await loadImage(src);
 
-            if (view.isDestroyed) {
-              return;
-            }
+          const result = findPlaceholder(view.state, upload.id);
+          if (result === null) {
+            return;
+          }
 
-            const [from, to] = result;
-            view.dispatch(
-              view.state.tr
-                .replaceWith(
-                  from,
-                  to || from,
-                  schema.nodes.image.create({
-                    src,
-                    source: upload.source,
-                    ...upload.dimensions,
-                    ...options.attrs,
-                  })
-                )
-                .setMeta(uploadPlaceholderPlugin, { remove: { id: upload.id } })
-            );
-          };
+          if (view.isDestroyed) {
+            return;
+          }
 
-          newImg.onerror = () => {
-            throw new Error(`Error loading image: ${src}`);
-          };
-
-          newImg.src = src;
+          const [from, to] = result;
+          view.dispatch(
+            view.state.tr
+              .replaceWith(
+                from,
+                to || from,
+                schema.nodes.image.create({
+                  src,
+                  source: upload.source,
+                  ...upload.dimensions,
+                  ...rowAttrs,
+                  ...options.attrs,
+                })
+              )
+              .setMeta(uploadPlaceholderPlugin, { remove: { id: upload.id } })
+          );
         } else if (upload.isVideo) {
           const result = findPlaceholder(view.state, upload.id);
           if (result === null) {
@@ -254,7 +276,43 @@ const insertFiles = async function (
           onFileUploadStop();
         }
       });
+
+    previousInsert = inserting;
   }
 };
+
+/**
+ * Prepares a position to insert a row of images at, inserting an empty
+ * paragraph into the document if one is needed.
+ *
+ * @param view the editor view.
+ * @param pos the position the files were requested at.
+ * @returns the position to insert the row at, or undefined if the images
+ * cannot be placed in a row here.
+ */
+function prepareRow(view: EditorView, pos: number): number | undefined {
+  const { tr } = view.state;
+  const rowPos = prepareImageRow(tr, pos);
+  if (rowPos !== undefined && tr.docChanged) {
+    view.dispatch(tr);
+  }
+  return rowPos;
+}
+
+/**
+ * Loads an image so that it is ready to display once inserted.
+ *
+ * @param src the image source.
+ * @returns a promise that resolves once the image has loaded.
+ * @throws if the image fails to load.
+ */
+function loadImage(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error(`Error loading image: ${src}`));
+    img.src = src;
+  });
+}
 
 export default insertFiles;
