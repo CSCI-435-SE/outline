@@ -224,6 +224,18 @@ export default class WebsocketsProcessor {
         return socketio.to(channels).emit(event.name, data);
       }
 
+      // Clients treat a review like any other change to the document's
+      // properties, so it is sent as an update.
+      case "documents.review": {
+        const document = await Document.findByPk(event.documentId);
+        if (!document) {
+          return;
+        }
+        const data = await presentDocument(undefined, document);
+        const channels = await this.getDocumentEventChannels(event, document);
+        return socketio.to(channels).emit("documents.update", data);
+      }
+
       case "documents.move": {
         const documents = await Document.findAll({
           where: {

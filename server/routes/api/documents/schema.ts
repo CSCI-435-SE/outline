@@ -428,6 +428,12 @@ export const DocumentsArchiveSchema = BaseSchema.extend({
 
 export type DocumentsArchiveReq = z.infer<typeof DocumentsArchiveSchema>;
 
+export const DocumentsReviewSchema = BaseSchema.extend({
+  body: BaseIdSchema,
+});
+
+export type DocumentsReviewReq = z.infer<typeof DocumentsReviewSchema>;
+
 export const DocumentsDeleteSchema = BaseSchema.extend({
   body: BaseIdSchema.extend({
     /** Whether to permanently delete the doc as opposed to soft-delete */

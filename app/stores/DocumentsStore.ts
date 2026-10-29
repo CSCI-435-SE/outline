@@ -634,6 +634,26 @@ export default class DocumentsStore extends Store<Document> {
     }
   };
 
+  /**
+   * Marks the document as reviewed, confirming it is still accurate without
+   * editing it.
+   *
+   * @param document The document to mark as reviewed.
+   */
+  @action
+  review = async (document: Document) => {
+    const res = await client.post("/documents.review", {
+      id: document.id,
+    });
+    runInAction("Document#review", () => {
+      invariant(res?.data, "Data should be available");
+      document.updateData(res.data);
+      this.addPolicies(res.policies);
+    });
+    const collection = this.getCollectionForDocument(document);
+    collection?.updateDocument(document);
+  };
+
   @action
   restore = async (
     document: Document,

@@ -14,6 +14,7 @@ import {
   NotificationEventType,
 } from "@shared/types";
 import Storage from "@shared/utils/Storage";
+import { getStalenessDate } from "@shared/utils/getStalenessDate";
 import { isStale } from "@shared/utils/isStale";
 import { isRTL } from "@shared/utils/rtl";
 import slugify from "@shared/utils/slugify";
@@ -67,6 +68,18 @@ export default class Document extends ArchivableModel implements Searchable {
    */
   @observable
   lastEditedAt: string | undefined;
+
+  /**
+   * When a user last confirmed the document is still accurate without editing it.
+   */
+  @observable
+  reviewedAt: string | null | undefined;
+
+  /**
+   * The id of the user who last marked the document as reviewed.
+   */
+  @observable
+  reviewedById: string | null | undefined;
 
   /**
    * An optional explanation left by the user who archived the document.
@@ -323,13 +336,31 @@ export default class Document extends ArchivableModel implements Searchable {
   }
 
   /**
-   * Whether the document has not been edited recently and may need review.
-   * Drafts and archived documents are never considered stale.
+   * Whether the document has not been edited or reviewed recently and may need
+   * review. Drafts and archived documents are never considered stale.
    */
   @computed
   get isStale(): boolean {
     return (
-      !!this.publishedAt && !this.isArchived && isStale(this.lastEditedAt)
+      !!this.publishedAt &&
+      !this.isArchived &&
+      isStale(getStalenessDate(this.lastEditedAt, this.reviewedAt))
+    );
+  }
+
+  /**
+   * Whether the document was marked as reviewed after its last edit, so the
+   * review is the most recent confirmation that it is accurate.
+   */
+  @computed
+  get isReviewedSinceEdit(): boolean {
+    if (!this.reviewedAt) {
+      return false;
+    }
+    return (
+      !this.lastEditedAt ||
+      new Date(this.reviewedAt).getTime() >=
+        new Date(this.lastEditedAt).getTime()
     );
   }
 
@@ -493,6 +524,8 @@ export default class Document extends ArchivableModel implements Searchable {
   }
 
   archive = (reason?: string) => this.store.archive(this, reason);
+
+  review = () => this.store.review(this);
 
   restore = (options?: { revisionId?: string; collectionId?: string }) =>
     this.store.restore(this, options);
@@ -673,6 +706,7 @@ export default class Document extends ArchivableModel implements Searchable {
       color: this.color ?? undefined,
       icon: this.icon ?? undefined,
       lastEditedAt: this.lastEditedAt,
+      reviewedAt: this.reviewedAt ?? undefined,
       children: this.childDocuments.map((doc) => doc.asNavigationNode),
       url: this.url,
       isDraft: this.isDraft,

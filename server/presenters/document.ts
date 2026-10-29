@@ -85,6 +85,8 @@ async function presentDocument(
     updatedAt: document.updatedAt,
     updatedBy: undefined,
     lastEditedAt: document.lastEditedAt,
+    reviewedAt: document.reviewedAt,
+    reviewedById: document.reviewedById,
     publishedAt: document.publishedAt,
     archivedAt: document.archivedAt,
     archivedReason: document.archivedReason,
@@ -106,6 +108,8 @@ async function presentDocument(
   if (options.isPublic && !options.includeUpdatedAt) {
     delete res.updatedAt;
     delete res.lastEditedAt;
+    delete res.reviewedAt;
+    delete res.reviewedById;
   }
 
   if (document.summary) {

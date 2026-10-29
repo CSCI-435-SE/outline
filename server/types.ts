@@ -236,6 +236,11 @@ export type DocumentEvent = BaseEvent<Document> &
         collectionId: string;
       }
     | {
+        name: "documents.review";
+        documentId: string;
+        collectionId?: string;
+      }
+    | {
         name:
           | "documents.update"
           | "documents.update.delayed"

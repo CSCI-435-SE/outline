@@ -15,6 +15,7 @@ import { createContext } from "@server/context";
 import { parser } from "@server/editor";
 import type { Group, User } from "@server/models";
 import {
+  Collection,
   Document,
   View,
   Revision,
@@ -4799,6 +4800,223 @@ describe("#documents.archive", () => {
       },
     });
     expect(res.status).toEqual(401);
+  });
+});
+
+describe("#documents.review", () => {
+  it("should require id", async () => {
+    const user = await buildUser();
+    const res = await server.post("/api/documents.review", user);
+    const body = await res.json();
+    expect(res.status).toEqual(400);
+    expect(body.message).toEqual("id: Must be a valid UUID or slug");
+  });
+
+  it("should require authentication", async () => {
+    const document = await buildDocument();
+    const res = await server.post("/api/documents.review", {
+      body: {
+        id: document.id,
+      },
+    });
+    expect(res.status).toEqual(401);
+  });
+
+  it("should mark the document as reviewed", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      lastEditedAt: subDays(new Date(), 365),
+    });
+
+    const res = await server.post("/api/documents.review", user, {
+      body: {
+        id: document.id,
+      },
+    });
+    const body = await res.json();
+
+    expect(res.status).toEqual(200);
+    expect(body.data.reviewedAt).toBeTruthy();
+    expect(body.data.reviewedById).toEqual(user.id);
+    expect(body.policies[0].abilities.review).toEqual(true);
+
+    const reloaded = await Document.findByPk(document.id, {
+      rejectOnEmpty: true,
+    });
+    expect(reloaded.reviewedAt).toBeTruthy();
+    expect(reloaded.reviewedById).toEqual(user.id);
+  });
+
+  it("should not edit the document or create a revision", async () => {
+    const user = await buildUser();
+    const lastEditedAt = subDays(new Date(), 365);
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      lastEditedAt,
+    });
+    const before = await Document.findByPk(document.id, {
+      rejectOnEmpty: true,
+    });
+    const revisions = await Revision.count({
+      where: { documentId: document.id },
+    });
+
+    const res = await server.post("/api/documents.review", user, {
+      body: {
+        id: document.id,
+      },
+    });
+    expect(res.status).toEqual(200);
+
+    const after = await Document.findByPk(document.id, {
+      rejectOnEmpty: true,
+    });
+    expect(after.updatedAt.toISOString()).toEqual(
+      before.updatedAt.toISOString()
+    );
+    expect(after.lastEditedAt?.toISOString()).toEqual(
+      lastEditedAt.toISOString()
+    );
+    expect(after.text).toEqual(before.text);
+    expect(
+      await Revision.count({ where: { documentId: document.id } })
+    ).toEqual(revisions);
+  });
+
+  it("should record a review event in the document history", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+
+    await server.post("/api/documents.review", user, {
+      body: {
+        id: document.id,
+      },
+    });
+
+    const events = await Event.findAll({
+      where: {
+        documentId: document.id,
+        name: "documents.review",
+      },
+    });
+    expect(events.length).toEqual(1);
+    expect(events[0].actorId).toEqual(user.id);
+
+    const res = await server.post("/api/events.list", user, {
+      body: {
+        documentId: document.id,
+        events: ["documents.review"],
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.map((event: { name: string }) => event.name)).toEqual([
+      "documents.review",
+    ]);
+  });
+
+  it("should store the review date in the collection structure", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+    });
+
+    const res = await server.post("/api/documents.review", user, {
+      body: {
+        id: document.id,
+      },
+    });
+    const body = await res.json();
+
+    const reloaded = await Collection.findByPk(collection.id, {
+      includeDocumentStructure: true,
+      rejectOnEmpty: true,
+    });
+    const node = reloaded.documentStructure?.find(
+      (item) => item.id === document.id
+    );
+    expect(node?.reviewedAt).toEqual(body.data.reviewedAt);
+  });
+
+  it("should not allow users without edit access", async () => {
+    const user = await buildUser();
+    const viewer = await buildViewer({ teamId: user.teamId });
+    const collection = await buildCollection({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+    });
+
+    const res = await server.post("/api/documents.review", viewer, {
+      body: {
+        id: document.id,
+      },
+    });
+    expect(res.status).toEqual(403);
+  });
+
+  it("should not allow users from another team", async () => {
+    const document = await buildDocument();
+    const user = await buildUser();
+
+    const res = await server.post("/api/documents.review", user, {
+      body: {
+        id: document.id,
+      },
+    });
+    expect(res.status).toEqual(403);
+  });
+
+  it("should not allow reviewing a draft", async () => {
+    const user = await buildUser();
+    const document = await buildDraftDocument({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+
+    const res = await server.post("/api/documents.review", user, {
+      body: {
+        id: document.id,
+      },
+    });
+    expect(res.status).toEqual(403);
+  });
+
+  it("should not allow reviewing an archived document", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      archivedAt: new Date(),
+    });
+
+    const res = await server.post("/api/documents.review", user, {
+      body: {
+        id: document.id,
+      },
+    });
+    expect(res.status).toEqual(403);
   });
 });
 

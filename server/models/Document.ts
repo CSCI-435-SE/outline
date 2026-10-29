@@ -420,6 +420,11 @@ class Document extends ArchivableModel<
   @SkipChangeset
   lastEditedAt: Date | null;
 
+  /** When a user last confirmed the document is still accurate without editing it. */
+  @IsDate
+  @Column(DataType.DATE)
+  reviewedAt: Date | null;
+
   /** An array of user IDs that have edited this document. */
   @Column(DataType.ARRAY(DataType.UUID))
   collaboratorIds: string[];
@@ -508,8 +513,12 @@ class Document extends ArchivableModel<
     { transaction }: SaveOptions<InferAttributes<Document>>
   ) {
     const editDateChanged =
-      model.changed("lastEditedAt") &&
-      Document.shouldRefreshStructureEditDate(model.previous("lastEditedAt"));
+      (model.changed("lastEditedAt") &&
+        Document.shouldRefreshStructureEditDate(
+          model.previous("lastEditedAt")
+        )) ||
+      // a review clears the stale flag in the sidebar, so always refresh
+      model.changed("reviewedAt");
 
     // templates, drafts, and archived documents don't appear in the structure
     // and so never need to be updated when the title changes
@@ -694,6 +703,13 @@ class Document extends ArchivableModel<
 
   @BelongsTo(() => User, "lastModifiedById")
   updatedBy: User;
+
+  @BelongsTo(() => User, "reviewedById")
+  reviewedBy: User | null;
+
+  @ForeignKey(() => User)
+  @Column(DataType.UUID)
+  reviewedById: string | null;
 
   @ForeignKey(() => User)
   @Column(DataType.UUID)
@@ -1300,6 +1316,23 @@ class Document extends ArchivableModel<
     return this;
   };
 
+  /**
+   * Marks the document as reviewed, confirming it is still accurate without
+   * editing it. This resets the stale clock and records a "documents.review"
+   * event, but does not create a revision or change when the document was
+   * last updated or edited.
+   *
+   * @param ctx The API context of the user reviewing the document.
+   * @returns The updated document.
+   */
+  reviewWithCtx = async (ctx: APIContext) => {
+    const { user } = ctx.state.auth;
+    this.reviewedAt = new Date();
+    this.reviewedById = user.id;
+    await this.saveWithCtx(ctx, { silent: true }, { name: "review" });
+    return this;
+  };
+
   // Restore an archived document back to being visible to the team
   restoreTo = async (
     ctx: APIContext,
@@ -1448,6 +1481,7 @@ class Document extends ArchivableModel<
       icon: isNil(this.icon) ? undefined : this.icon,
       color: isNil(this.color) ? undefined : this.color,
       lastEditedAt: this.lastEditedAt?.toISOString(),
+      reviewedAt: this.reviewedAt?.toISOString(),
       children,
     };
   };

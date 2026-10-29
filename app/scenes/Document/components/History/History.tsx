@@ -32,6 +32,7 @@ const DocumentEvents = [
   "documents.unarchive",
   "documents.delete",
   "documents.restore",
+  "documents.review",
   "documents.add_user",
   "documents.remove_user",
   "documents.move",

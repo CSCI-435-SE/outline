@@ -109,6 +109,14 @@ allow(User, "publish", Document, (actor, document) =>
   )
 );
 
+allow(User, "review", Document, (actor, document) =>
+  and(
+    //
+    !!document?.publishedAt,
+    can(actor, "update", document)
+  )
+);
+
 allow(User, "manageUsers", Document, (actor, document) =>
   and(
     isTeamMutable(actor),
