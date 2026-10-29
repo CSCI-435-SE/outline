@@ -22,6 +22,7 @@ import { DiagramPlaceholder } from "../components/DiagramPlaceholder";
 import { addComment } from "../commands/comment";
 import { addLink } from "../commands/link";
 import { commentedImagePlugin } from "../plugins/CommentedImagePlugin";
+import { SideBySideImagesPlugin } from "../plugins/SideBySideImagesPlugin";
 
 const imageSizeRegex = /\s=(\d+)?x(\d+)?$/;
 
@@ -257,6 +258,7 @@ export default class Image extends SimpleImage {
     return [
       ...super.plugins,
       commentedImagePlugin(),
+      new SideBySideImagesPlugin(),
       new Plugin({
         props: {
           handleDOMEvents: {
