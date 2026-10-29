@@ -33,13 +33,14 @@ import { useLocationSidebarContext } from "~/hooks/useLocationSidebarContext";
 import { usePinnedDocuments } from "~/hooks/usePinnedDocuments";
 import usePolicy from "~/hooks/usePolicy";
 import useStores from "~/hooks/useStores";
-import { NotFoundError } from "~/utils/errors";
+import { AuthorizationError, NotFoundError } from "~/utils/errors";
 import {
   collectionEditPath,
   collectionPath,
   matchCollectionEdit,
   updateCollectionPath,
 } from "~/utils/routeHelpers";
+import Error403 from "../Errors/Error403";
 import Error404 from "../Errors/Error404";
 import Actions from "./components/Actions";
 import DropToImport from "./components/DropToImport";
@@ -130,7 +131,11 @@ const CollectionScene = observer(function CollectionScene_() {
   useCommandBarActions([editCollection], [ui.activeCollectionId ?? "none"]);
 
   if (!collection && error) {
-    return <Error404 />;
+    return error instanceof AuthorizationError ? (
+      <Error403 isCollection />
+    ) : (
+      <Error404 />
+    );
   }
   if (!collection) {
     return <Loading />;

@@ -1,4 +1,6 @@
+import fractionalIndex from "fractional-index";
 import Router from "koa-router";
+import { Sequelize } from "sequelize";
 import auth from "@server/middlewares/authentication";
 import { rateLimiter } from "@server/middlewares/rateLimiter";
 import { transaction } from "@server/middlewares/transaction";
@@ -123,10 +125,31 @@ router.post(
       transaction,
     });
 
-    if (!membership) {
+    if (membership) {
+      membership.permission = permission;
+      // disconnect from the source if the permission is manually updated
+      membership.sourceId = null;
+      await membership.saveWithCtx(ctx);
+    } else {
+      const [firstMembership] = await UserMembership.findAll({
+        where: {
+          userId: accessRequest.userId,
+        },
+        attributes: ["id", "index", "updatedAt"],
+        limit: 1,
+        order: [
+          // using LC_COLLATE:"C" because we need byte order to drive the sorting
+          Sequelize.literal('"user_permission"."index" collate "C"'),
+          ["updatedAt", "DESC"],
+        ],
+        transaction,
+      });
+
       await UserMembership.createWithCtx(ctx, {
         userId: accessRequest.userId,
         documentId: accessRequest.documentId,
+        // create membership at the beginning of their "Shared with me" section
+        index: fractionalIndex(null, firstMembership?.index ?? null),
         permission: permission,
         createdById: user.id,
       });
