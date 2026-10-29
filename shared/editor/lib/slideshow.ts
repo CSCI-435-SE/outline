@@ -73,3 +73,58 @@ export function toSlideshowAttrs(attrs: unknown): SlideshowAttrs {
         : DEFAULT_SLIDESHOW_INTERVAL,
   };
 }
+
+/** The transition intervals offered in the toolbar, in milliseconds. */
+export const SLIDESHOW_INTERVALS = [2000, 3000, 5000, 8000, 10000];
+
+/**
+ * Formats a slideshow interval as a short duration in seconds, e.g. "3s".
+ *
+ * @param interval the interval in milliseconds.
+ * @param locale the locale to format the number in, defaults to the runtime locale.
+ * @returns the formatted duration.
+ */
+export function formatSlideshowInterval(
+  interval: number,
+  locale?: string
+): string {
+  return new Intl.NumberFormat(locale, {
+    style: "unit",
+    unit: "second",
+    unitDisplay: "narrow",
+    maximumFractionDigits: 1,
+  }).format(interval / 1000);
+}
+
+/** The state of a single image being uploaded into a slideshow. */
+export interface SlideshowUploadItem {
+  /** A unique id for the item, stable across retries. */
+  id: string;
+  /** The file being uploaded. */
+  file: File;
+  /** A local URL used to preview the image while it uploads. */
+  previewUrl: string;
+  /** The fraction of the upload that is complete, between 0 and 1. */
+  progress: number;
+  /** Whether the upload is in progress, finished or failed. */
+  status: "uploading" | "done" | "error";
+  /** The URL returned by attachment storage once the upload is done. */
+  src?: string;
+  /** A message describing why the upload failed. */
+  error?: string;
+}
+
+/**
+ * Returns the image URLs of the finished uploads, in the order the files were
+ * selected rather than the order the uploads completed.
+ *
+ * @param items the upload items, in the order the files were selected.
+ * @returns the uploaded image URLs.
+ */
+export function getUploadedSlideshowImages(
+  items: readonly SlideshowUploadItem[]
+): string[] {
+  return items
+    .map((item) => (item.status === "done" ? item.src : undefined))
+    .filter((src): src is string => !!src);
+}

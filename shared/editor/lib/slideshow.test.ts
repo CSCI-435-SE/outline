@@ -1,5 +1,9 @@
+import type { SlideshowUploadItem } from "./slideshow";
 import {
   DEFAULT_SLIDESHOW_INTERVAL,
+  SLIDESHOW_INTERVALS,
+  formatSlideshowInterval,
+  getUploadedSlideshowImages,
   isSlideshowImageUrl,
   parseSlideshowUrls,
   toSlideshowAttrs,
@@ -57,5 +61,47 @@ describe("toSlideshowAttrs", () => {
 
   it("parses numeric string intervals", () => {
     expect(toSlideshowAttrs({ interval: "4500" }).interval).toBe(4500);
+  });
+});
+
+describe("formatSlideshowInterval", () => {
+  it("formats milliseconds as seconds", () => {
+    expect(formatSlideshowInterval(3000, "en")).toBe("3s");
+    expect(formatSlideshowInterval(4500, "en")).toBe("4.5s");
+  });
+
+  it("offers the default interval as an option", () => {
+    expect(SLIDESHOW_INTERVALS).toContain(DEFAULT_SLIDESHOW_INTERVAL);
+    expect(
+      SLIDESHOW_INTERVALS.every(
+        (interval) => toSlideshowAttrs({ interval }).interval === interval
+      )
+    ).toBe(true);
+  });
+});
+
+describe("getUploadedSlideshowImages", () => {
+  const item = (
+    id: string,
+    status: SlideshowUploadItem["status"],
+    src?: string
+  ): SlideshowUploadItem => ({
+    id,
+    file: new File(["x"], `${id}.png`, { type: "image/png" }),
+    previewUrl: "",
+    progress: status === "done" ? 1 : 0,
+    status,
+    src,
+  });
+
+  it("returns finished uploads in the selected order", () => {
+    expect(
+      getUploadedSlideshowImages([
+        item("a", "done", "/a"),
+        item("b", "error"),
+        item("c", "uploading"),
+        item("d", "done", "/d"),
+      ])
+    ).toEqual(["/a", "/d"]);
   });
 });
