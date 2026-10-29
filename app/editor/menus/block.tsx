@@ -114,10 +114,16 @@ export default function blockMenuItems(
       keywords: "picture photo",
     },
     {
-      name: "slideshow",
+      name: "uploadSlideshow",
       title: t("Slideshow"),
       icon: <ImageIcon />,
-      keywords: "carousel gallery images photos slides",
+      keywords: "carousel gallery images photos slides upload",
+    },
+    {
+      name: "slideshow",
+      title: t("Slideshow from links"),
+      icon: <ImageIcon />,
+      keywords: "carousel gallery images photos slides url",
       placeholder: `${t("Paste image links, separated by spaces")}…`,
     },
     {
