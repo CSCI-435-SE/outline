@@ -6,14 +6,35 @@ describe("credentialPatterns", () => {
     expect(scanForCredentials(text)).toContain("AWS Access Key ID");
   });
 
+  it("detects AWS secret key with label first", () => {
+    const text =
+      "aws_secret_access_key = wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEYab";
+    expect(scanForCredentials(text)).toContain("AWS Secret Access Key");
+  });
+
   it("detects GitHub Personal Access Token", () => {
     const text = "token: ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890";
     expect(scanForCredentials(text)).toContain("GitHub Personal Access Token");
   });
 
+  it("detects GitHub fine-grained token", () => {
+    const text = "github_pat_" + "A".repeat(30);
+    expect(scanForCredentials(text)).toContain("GitHub Fine-Grained Token");
+  });
+
   it("detects RSA Private Key", () => {
     const text = "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA...";
     expect(scanForCredentials(text)).toContain("RSA Private Key");
+  });
+
+  it("detects OpenSSH private key", () => {
+    const text = "-----BEGIN OPENSSH PRIVATE KEY-----";
+    expect(scanForCredentials(text)).toContain("OpenSSH Private Key");
+  });
+
+  it("detects PGP private key", () => {
+    const text = "-----BEGIN PGP PRIVATE KEY BLOCK-----";
+    expect(scanForCredentials(text)).toContain("PGP Private Key");
   });
 
   it("detects database connection string", () => {
@@ -26,11 +47,6 @@ describe("credentialPatterns", () => {
     expect(scanForCredentials(text)).toContain("Slack Token");
   });
 
-  it("detects PGP private key", () => {
-    const text = "-----BEGIN PGP PRIVATE KEY BLOCK-----";
-    expect(scanForCredentials(text)).toContain("PGP Private Key");
-  });
-
   it("detects Google API key", () => {
     const text = "key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI";
     expect(scanForCredentials(text)).toContain("Google API Key");
@@ -39,6 +55,16 @@ describe("credentialPatterns", () => {
   it("detects generic API key", () => {
     const text = "api_key: 'abcdef1234567890abcd'";
     expect(scanForCredentials(text)).toContain("Generic API Key");
+  });
+
+  it("detects a realistic Bearer token", () => {
+    const text = "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.abc123def456";
+    expect(scanForCredentials(text)).toContain("Bearer Token");
+  });
+
+  it("does not flag a normal sentence containing Bearer", () => {
+    const text = "Use Bearer authentication when calling the endpoint.";
+    expect(scanForCredentials(text)).not.toContain("Bearer Token");
   });
 
   it("returns empty array for clean text", () => {
