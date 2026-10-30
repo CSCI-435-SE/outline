@@ -1452,6 +1452,78 @@ router.post(
 router.post(
   "documents.review",
   auth(),
+  validate(T.DocumentsMarkReviewedSchema),
+  transaction(),
+  async (ctx: APIContext<T.DocumentsMarkReviewedReq>) => {
+    const { id } = ctx.input.body;
+    const { user } = ctx.state.auth;
+    const { transaction } = ctx.state;
+
+    const document = await Document.findByPk(id, {
+      userId: user.id,
+      rejectOnEmpty: true,
+      transaction,
+    });
+    authorize(user, "markReviewed", document);
+
+    await document.reviewWithCtx(ctx);
+
+    ctx.body = {
+      data: await presentDocument(ctx, document),
+      policies: presentPolicies(user, [document]),
+    };
+  }
+);
+
+router.post(
+  "documents.request_review",
+  auth(),
+  validate(T.DocumentsRequestReviewSchema),
+  transaction(),
+  async (ctx: APIContext<T.DocumentsRequestReviewReq>) => {
+    const { id, reviewerId } = ctx.input.body;
+    const { user } = ctx.state.auth;
+    const { transaction } = ctx.state;
+
+    if (reviewerId === user.id) {
+      throw ValidationError("You cannot review your own request");
+    }
+
+    const [document, reviewer] = await Promise.all([
+      Document.findByPk(id, {
+        userId: user.id,
+        rejectOnEmpty: true,
+        transaction,
+      }),
+      User.findByPk(reviewerId, {
+        rejectOnEmpty: true,
+        transaction,
+      }),
+    ]);
+    authorize(user, "requestReview", document);
+    authorize(user, "read", reviewer);
+
+    // Load the document as the reviewer so their memberships are included.
+    const reviewerDocument = await Document.findByPk(id, {
+      userId: reviewer.id,
+      transaction,
+    });
+    if (cannot(reviewer, "read", reviewerDocument)) {
+      throw ValidationError("Share this document with the reviewer first");
+    }
+
+    await document.requestReviewWithCtx(ctx, reviewer);
+
+    ctx.body = {
+      data: await presentDocument(ctx, document),
+      policies: presentPolicies(user, [document]),
+    };
+  }
+);
+
+router.post(
+  "documents.approve",
+  auth(),
   validate(T.DocumentsReviewSchema),
   transaction(),
   async (ctx: APIContext<T.DocumentsReviewReq>) => {
@@ -1466,7 +1538,33 @@ router.post(
     });
     authorize(user, "review", document);
 
-    await document.reviewWithCtx(ctx);
+    await document.completeReviewWithCtx(ctx, true);
+
+    ctx.body = {
+      data: await presentDocument(ctx, document),
+      policies: presentPolicies(user, [document]),
+    };
+  }
+);
+
+router.post(
+  "documents.request_changes",
+  auth(),
+  validate(T.DocumentsReviewSchema),
+  transaction(),
+  async (ctx: APIContext<T.DocumentsReviewReq>) => {
+    const { id } = ctx.input.body;
+    const { user } = ctx.state.auth;
+    const { transaction } = ctx.state;
+
+    const document = await Document.findByPk(id, {
+      userId: user.id,
+      rejectOnEmpty: true,
+      transaction,
+    });
+    authorize(user, "review", document);
+
+    await document.completeReviewWithCtx(ctx, false);
 
     ctx.body = {
       data: await presentDocument(ctx, document),

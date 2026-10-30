@@ -255,6 +255,26 @@ export type DocumentEvent = BaseEvent<Document> &
         };
       }
     | {
+        name: "documents.review_requested";
+        documentId: string;
+        collectionId?: string | null;
+        data: {
+          reviewerId: string;
+          /** The reviewer this request replaced, if any */
+          previousReviewerId: string | null;
+        };
+      }
+    | {
+        name:
+          | "documents.review_approved"
+          | "documents.review_changes_requested";
+        documentId: string;
+        collectionId?: string | null;
+        data: {
+          reviewerId: string;
+        };
+      }
+    | {
         name: "documents.title_change";
         documentId: string;
         collectionId: string;

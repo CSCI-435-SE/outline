@@ -1,4 +1,5 @@
 import { Op } from "sequelize";
+import { TeamPreference } from "@shared/types";
 import { Hour } from "@shared/utils/time";
 import { traceFunction } from "@server/logging/tracing";
 import type { Document } from "@server/models";
@@ -127,6 +128,12 @@ async function presentDocument(
     res.templateId = document.templateId;
     res.insightsEnabled = document.insightsEnabled;
     res.popularityScore = document.popularityScore;
+    const team = ctx?.state.auth?.user?.team;
+    if (team?.getPreference(TeamPreference.ReviewWorkflow)) {
+      res.reviewStatus = document.reviewStatus;
+      res.reviewerId = document.reviewerId;
+      res.reviewRequestedById = document.reviewRequestedById;
+    }
     if (options.includeCommentCount) {
       res.commentCount = await document.commentCount;
     }

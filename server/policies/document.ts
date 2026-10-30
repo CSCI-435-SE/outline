@@ -2,6 +2,7 @@ import invariant from "invariant";
 import {
   CommentingAccess,
   DocumentPermission,
+  DocumentReviewStatus,
   TeamPreference,
 } from "@shared/types";
 import { Document, Revision, User, Team } from "@server/models";
@@ -109,7 +110,7 @@ allow(User, "publish", Document, (actor, document) =>
   )
 );
 
-allow(User, "review", Document, (actor, document) =>
+allow(User, "markReviewed", Document, (actor, document) =>
   and(
     //
     !!document?.publishedAt,
@@ -127,6 +128,24 @@ allow(User, "manageUsers", Document, (actor, document) =>
       can(actor, "update", document?.collection),
       !!document?.isDraft && actor.id === document?.createdById
     )
+  )
+);
+
+allow(User, "requestReview", Document, (actor, document) =>
+  and(
+    !!actor.team.getPreference(TeamPreference.ReviewWorkflow),
+    can(actor, "update", document)
+  )
+);
+
+allow(User, "review", Document, (actor, document) =>
+  and(
+    !!actor.team.getPreference(TeamPreference.ReviewWorkflow),
+    !!document?.isActive,
+    isTeamMutable(actor),
+    can(actor, "read", document),
+    document?.reviewStatus === DocumentReviewStatus.InReview,
+    actor.id === document?.reviewerId
   )
 );
 

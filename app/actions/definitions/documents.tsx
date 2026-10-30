@@ -1300,7 +1300,7 @@ export const markDocumentAsReviewed = createAction({
     if (!activeDocumentId) {
       return false;
     }
-    return !!stores.policies.abilities(activeDocumentId).review;
+    return !!stores.policies.abilities(activeDocumentId).markReviewed;
   },
   perform: async ({ activeDocumentId, stores, t }) => {
     if (!activeDocumentId) {

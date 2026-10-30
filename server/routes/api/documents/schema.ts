@@ -428,11 +428,13 @@ export const DocumentsArchiveSchema = BaseSchema.extend({
 
 export type DocumentsArchiveReq = z.infer<typeof DocumentsArchiveSchema>;
 
-export const DocumentsReviewSchema = BaseSchema.extend({
+export const DocumentsMarkReviewedSchema = BaseSchema.extend({
   body: BaseIdSchema,
 });
 
-export type DocumentsReviewReq = z.infer<typeof DocumentsReviewSchema>;
+export type DocumentsMarkReviewedReq = z.infer<
+  typeof DocumentsMarkReviewedSchema
+>;
 
 export const DocumentsDeleteSchema = BaseSchema.extend({
   body: BaseIdSchema.extend({
@@ -454,6 +456,23 @@ export const DocumentsUnpublishSchema = BaseSchema.extend({
 });
 
 export type DocumentsUnpublishReq = z.infer<typeof DocumentsUnpublishSchema>;
+
+export const DocumentsRequestReviewSchema = BaseSchema.extend({
+  body: BaseIdSchema.extend({
+    /** Id of the user being asked to review the document */
+    reviewerId: z.uuid(),
+  }),
+});
+
+export type DocumentsRequestReviewReq = z.infer<
+  typeof DocumentsRequestReviewSchema
+>;
+
+export const DocumentsReviewSchema = BaseSchema.extend({
+  body: BaseIdSchema,
+});
+
+export type DocumentsReviewReq = z.infer<typeof DocumentsReviewSchema>;
 
 export const DocumentsImportSchema = BaseSchema.extend({
   body: z

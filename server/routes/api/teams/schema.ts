@@ -77,6 +77,8 @@ export const TeamsUpdateSchema = BaseSchema.extend({
         disabledEmbeds: z.array(z.string()).optional(),
         /** Number of days before a document is considered stale. */
         stalenessThreshold: z.number().int().positive().optional(),
+        /** Whether the document review workflow is enabled. */
+        reviewWorkflow: z.boolean().optional(),
       })
       .optional(),
   }),
