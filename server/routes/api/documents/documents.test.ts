@@ -4890,9 +4890,35 @@ describe("#documents.review", () => {
       lastEditedAt.toISOString()
     );
     expect(after.text).toEqual(before.text);
+    expect(after.revisionCount).toEqual(before.revisionCount);
     expect(
       await Revision.count({ where: { documentId: document.id } })
     ).toEqual(revisions);
+  });
+
+  it("should still increment the revision count for edits", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+
+    await server.post("/api/documents.review", user, {
+      body: { id: document.id },
+    });
+    const reviewed = await Document.findByPk(document.id, {
+      rejectOnEmpty: true,
+    });
+
+    const res = await server.post("/api/documents.update", user, {
+      body: { id: document.id, title: "Edited after review" },
+    });
+    expect(res.status).toEqual(200);
+
+    const edited = await Document.findByPk(document.id, {
+      rejectOnEmpty: true,
+    });
+    expect(edited.revisionCount).toEqual(reviewed.revisionCount + 1);
   });
 
   it("should record a review event in the document history", async () => {
@@ -4946,6 +4972,74 @@ describe("#documents.review", () => {
       body: {
         id: document.id,
       },
+    });
+    const body = await res.json();
+
+    const reloaded = await Collection.findByPk(collection.id, {
+      includeDocumentStructure: true,
+      rejectOnEmpty: true,
+    });
+    const node = reloaded.documentStructure?.find(
+      (item) => item.id === document.id
+    );
+    expect(node?.reviewedAt).toEqual(body.data.reviewedAt);
+  });
+
+  it("should not rewrite the collection structure for repeat reviews within a day", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+    });
+
+    const first = await server.post("/api/documents.review", user, {
+      body: { id: document.id },
+    });
+    const firstBody = await first.json();
+    const afterFirst = await Collection.findByPk(collection.id, {
+      includeDocumentStructure: true,
+      rejectOnEmpty: true,
+    });
+
+    const second = await server.post("/api/documents.review", user, {
+      body: { id: document.id },
+    });
+    const secondBody = await second.json();
+    expect(secondBody.data.reviewedAt).not.toEqual(firstBody.data.reviewedAt);
+
+    const afterSecond = await Collection.findByPk(collection.id, {
+      includeDocumentStructure: true,
+      rejectOnEmpty: true,
+    });
+    const node = afterSecond.documentStructure?.find(
+      (item) => item.id === document.id
+    );
+    expect(node?.reviewedAt).toEqual(firstBody.data.reviewedAt);
+    expect(afterSecond.updatedAt.toISOString()).toEqual(
+      afterFirst.updatedAt.toISOString()
+    );
+  });
+
+  it("should refresh the collection structure when the last review is over a day old", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      userId: user.id,
+      teamId: user.teamId,
+    });
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      collectionId: collection.id,
+      reviewedAt: subDays(new Date(), 2),
+    });
+
+    const res = await server.post("/api/documents.review", user, {
+      body: { id: document.id },
     });
     const body = await res.json();
 

@@ -488,6 +488,22 @@ class Document extends ArchivableModel<
     return !previous || Date.now() - new Date(previous).getTime() >= Day.ms;
   }
 
+  /**
+   * Whether the only pending changes to the document are from marking it as
+   * reviewed, so the save should not be treated as an edit.
+   *
+   * @param model The document being saved.
+   * @returns True if only the review fields have changed.
+   */
+  static isReviewOnlyChange(model: Document) {
+    const changed = model.changed();
+    return (
+      Array.isArray(changed) &&
+      changed.length > 0 &&
+      changed.every((key) => key === "reviewedAt" || key === "reviewedById")
+    );
+  }
+
   // hooks
 
   // Note: this hook must be declared before updateCollectionStructure and
@@ -512,13 +528,15 @@ class Document extends ArchivableModel<
     model: Document,
     { transaction }: SaveOptions<InferAttributes<Document>>
   ) {
+    // staleness is measured in days, so like edits a review only needs to
+    // refresh the structure at most once a day.
     const editDateChanged =
       (model.changed("lastEditedAt") &&
         Document.shouldRefreshStructureEditDate(
           model.previous("lastEditedAt")
         )) ||
-      // a review clears the stale flag in the sidebar, so always refresh
-      model.changed("reviewedAt");
+      (model.changed("reviewedAt") &&
+        Document.shouldRefreshStructureEditDate(model.previous("reviewedAt")));
 
     // templates, drafts, and archived documents don't appear in the structure
     // and so never need to be updated when the title changes
@@ -586,6 +604,10 @@ class Document extends ArchivableModel<
 
   @BeforeUpdate
   static async processUpdate(model: Document) {
+    // a review only confirms the document is still accurate, it does not
+    // change the document and so is not a new revision.
+    const isReviewOnly = Document.isReviewOnlyChange(model);
+
     // ensure documents have a title
     model.title = model.title || "";
 
@@ -614,7 +636,9 @@ class Document extends ArchivableModel<
     );
 
     // increment revision
-    model.revisionCount += 1;
+    if (!isReviewOnly) {
+      model.revisionCount += 1;
+    }
   }
 
   @BeforeUpdate
