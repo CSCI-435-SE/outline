@@ -70,4 +70,4 @@
 - `app/test/Document.test.ts` — `isStale` with reviews (including updating a loaded document), and `isReviewedSinceEdit`.
 - Claude started my local Docker Postgres and Redis containers and ran the migration on the test database only.
 - The four related existing suites (documents API, events API, document policies, document model) passed: 376 tests. The client `Document` tests passed. `yarn tsc` and oxlint were clean.
-- **Not yet tested by hand in the browser.** The dev database needs `yarn db:migrate` first.
+- Tested by hand in the browser after running `yarn db:migrate` on the dev database.
