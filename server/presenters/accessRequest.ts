@@ -9,6 +9,7 @@ export default function present(accessRequest: AccessRequest) {
     user: accessRequest.user ? presentUser(accessRequest.user) : undefined,
     teamId: accessRequest.teamId,
     status: accessRequest.status,
+    reason: accessRequest.reason,
     responderId: accessRequest.responderId,
     responder: accessRequest.responder
       ? presentUser(accessRequest.responder)

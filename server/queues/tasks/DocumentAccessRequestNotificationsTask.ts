@@ -1,5 +1,5 @@
 import { Op } from "sequelize";
-import { uniq } from "es-toolkit/compat";
+import { uniq, uniqBy } from "es-toolkit/compat";
 import {
   NotificationEventType,
   DocumentPermission,
@@ -48,7 +48,13 @@ export default class DocumentAccessRequestNotificationsTask extends BaseTask<Acc
       return;
     }
 
-    const recipients = await this.findDocumentAdmins(document);
+    const recipients = uniqBy(
+      [
+        ...(await this.findWorkspaceAdmins(document.teamId)),
+        ...(await this.findDocumentManagers(document)),
+      ],
+      "id"
+    );
     Logger.debug("task", "Access request notification recipients", {
       documentId: event.documentId,
       accessRequestId: event.modelId,
@@ -87,14 +93,30 @@ export default class DocumentAccessRequestNotificationsTask extends BaseTask<Acc
   }
 
   /**
+   * Find the workspace admins, who are always notified of access requests.
+   *
+   * @param teamId - the team to find admins for.
+   * @returns list of active workspace admins.
+   */
+  private async findWorkspaceAdmins(teamId: string): Promise<User[]> {
+    return User.findAll({
+      where: {
+        teamId,
+        role: UserRole.Admin,
+        suspendedAt: null,
+      },
+    });
+  }
+
+  /**
    * Find users who can manage the document, with tiered fallback:
-   * document admins → collection admins → workspace admins. The first tier
-   * with any users is used.
+   * document admins → collection admins. The first tier with any users is
+   * used.
    *
    * @param document - the document to find managers for.
    * @returns list of users who can manage the document.
    */
-  private async findDocumentAdmins(document: Document): Promise<User[]> {
+  private async findDocumentManagers(document: Document): Promise<User[]> {
     const documentManagerIds = await Document.membershipUserIds(
       document.id,
       DocumentPermission.Admin
@@ -114,18 +136,7 @@ export default class DocumentAccessRequestNotificationsTask extends BaseTask<Acc
       }
     }
 
-    Logger.debug("task", "Falling back to workspace admins", {
-      documentId: document.id,
-      collectionId: document.collectionId,
-    });
-
-    return User.findAll({
-      where: {
-        teamId: document.teamId,
-        role: UserRole.Admin,
-        suspendedAt: null,
-      },
-    });
+    return [];
   }
 
   private async loadUsers(ids: string[], teamId: string): Promise<User[]> {

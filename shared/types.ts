@@ -456,6 +456,7 @@ export enum TeamPreference {
   MCP = "mcp",
   /** List of disabled embed provider titles. */
   DisabledEmbeds = "disabledEmbeds",
+  StalenessThreshold = "stalenessThreshold",
   /** Whether the document review workflow is enabled. */
   ReviewWorkflow = "reviewWorkflow",
 }
@@ -475,6 +476,7 @@ export type TeamPreferences = {
   [TeamPreference.EmailDisplay]?: EmailDisplay;
   [TeamPreference.MCP]?: boolean;
   [TeamPreference.DisabledEmbeds]?: string[];
+  [TeamPreference.StalenessThreshold]?: number;
   [TeamPreference.ReviewWorkflow]?: boolean;
 };
 
@@ -492,6 +494,8 @@ export type NavigationNode = {
   emoji?: string;
   icon?: string;
   color?: string;
+  /** When the content or title of the document was last edited, ISO 8601. */
+  lastEditedAt?: string;
   children: NavigationNode[];
   isDraft?: boolean;
   collectionId?: string;

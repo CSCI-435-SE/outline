@@ -46,6 +46,13 @@ const uploadPlaceholder = new Plugin({
             (action.add.file ? URL.createObjectURL(action.add.file) : "");
           img.style.width = `${action.add.dimensions?.width}px`;
 
+          // images uploaded together share the row they will be inserted into
+          if (action.add.rowSize) {
+            element.classList.add("row");
+            element.style.width = `calc(${100 / action.add.rowSize}% - 2em)`;
+            img.style.width = "100%";
+          }
+
           element.appendChild(img);
 
           const deco = Decoration.widget(action.add.pos, element, {

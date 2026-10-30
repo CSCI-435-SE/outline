@@ -184,6 +184,89 @@ describe("review", () => {
   });
 });
 
+describe("lastEditedAt", () => {
+  const longAgo = new Date("2026-01-01T00:00:00Z");
+
+  const structureEditDate = async (document: Document) => {
+    const collection = await Collection.findByPk(document.collectionId!, {
+      includeDocumentStructure: true,
+    });
+    return collection!.documentStructure!.find((node) => node.id === document.id)
+      ?.lastEditedAt;
+  };
+
+  test("should be set on create", async () => {
+    const document = await buildDocument();
+    expect(document.lastEditedAt).toBeInstanceOf(Date);
+  });
+
+  test("should be included in the collection structure on create", async () => {
+    const document = await buildDocument();
+    expect(await structureEditDate(document)).toEqual(
+      document.lastEditedAt!.toISOString()
+    );
+  });
+
+  test("should update when text changes", async () => {
+    const document = await buildDocument();
+    await document.update({ lastEditedAt: longAgo }, { hooks: false });
+    document.text = "changed";
+    await document.save();
+    expect(document.lastEditedAt!.getTime()).toBeGreaterThan(
+      longAgo.getTime()
+    );
+  });
+
+  test("should update when title changes", async () => {
+    const document = await buildDocument();
+    await document.update({ lastEditedAt: longAgo }, { hooks: false });
+    document.title = "Renamed";
+    await document.save();
+    expect(document.lastEditedAt!.getTime()).toBeGreaterThan(
+      longAgo.getTime()
+    );
+  });
+
+  test("should not update when moved to another collection", async () => {
+    const document = await buildDocument();
+    const collection = await buildCollection({ teamId: document.teamId });
+    await document.update({ lastEditedAt: longAgo }, { hooks: false });
+    document.collectionId = collection.id;
+    await document.save();
+    await document.reload();
+    expect(document.lastEditedAt).toEqual(longAgo);
+  });
+
+  test("should not update when non-content fields change", async () => {
+    const document = await buildDocument();
+    await document.update({ lastEditedAt: longAgo }, { hooks: false });
+    document.fullWidth = !document.fullWidth;
+    document.icon = "star";
+    await document.save();
+    await document.reload();
+    expect(document.lastEditedAt).toEqual(longAgo);
+  });
+
+  test("should refresh the collection structure when the edit date is over a day old", async () => {
+    const document = await buildDocument();
+    await document.update({ lastEditedAt: longAgo }, { hooks: false });
+    document.text = "changed";
+    await document.save();
+    await document.reload();
+    expect(await structureEditDate(document)).toEqual(
+      document.lastEditedAt!.toISOString()
+    );
+  });
+
+  test("should not refresh the collection structure within a day", async () => {
+    const document = await buildDocument();
+    const before = await structureEditDate(document);
+    document.text = "changed";
+    await document.save();
+    expect(await structureEditDate(document)).toEqual(before);
+  });
+});
+
 describe("#findAllChildDocumentIds", () => {
   test("should return empty array if no children", async () => {
     const team = await buildTeam();

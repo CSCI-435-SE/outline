@@ -286,7 +286,7 @@ describe("DocumentAccessRequestNotificationsTask", () => {
       );
     });
 
-    it("should not fall back to workspace admins when document admins exist", async () => {
+    it("should notify workspace admins and document admins", async () => {
       const spy = vi.spyOn(Notification, "create");
       const team = await buildTeam();
       const workspaceAdmin = await buildAdmin({ teamId: team.id });
@@ -320,13 +320,54 @@ describe("DocumentAccessRequestNotificationsTask", () => {
         ip,
       });
 
-      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledTimes(2);
       expect(spy).toHaveBeenCalledWith(
         expect.objectContaining({
           userId: documentAdmin.id,
         })
       );
-      expect(spy).not.toHaveBeenCalledWith(
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: workspaceAdmin.id,
+        })
+      );
+    });
+
+    it("should notify a workspace admin who is also a document admin once", async () => {
+      const spy = vi.spyOn(Notification, "create");
+      const team = await buildTeam();
+      const workspaceAdmin = await buildAdmin({ teamId: team.id });
+      const actor = await buildUser({ teamId: team.id });
+      const document = await buildDocument({
+        teamId: team.id,
+        createdById: workspaceAdmin.id,
+      });
+
+      await UserMembership.create({
+        userId: workspaceAdmin.id,
+        documentId: document.id,
+        permission: DocumentPermission.Admin,
+        createdById: workspaceAdmin.id,
+      });
+
+      const accessRequest = await AccessRequest.create({
+        documentId: document.id,
+        userId: actor.id,
+        teamId: team.id,
+      });
+
+      const task = new DocumentAccessRequestNotificationsTask();
+      await task.perform({
+        name: "access_requests.create",
+        modelId: accessRequest.id,
+        documentId: document.id,
+        teamId: team.id,
+        actorId: actor.id,
+        ip,
+      });
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledWith(
         expect.objectContaining({
           userId: workspaceAdmin.id,
         })

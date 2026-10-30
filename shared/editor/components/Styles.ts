@@ -801,6 +801,12 @@ th .image .image-wrapper img {
   }
 }
 
+.image.placeholder.row {
+  float: left;
+  margin-right: 2em;
+  margin-bottom: 1em;
+}
+
 .file.placeholder {
   display: flex;
   align-items: center;

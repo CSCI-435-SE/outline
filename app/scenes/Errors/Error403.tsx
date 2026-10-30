@@ -1,33 +1,38 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistory, useLocation } from "react-router-dom";
-import { toast } from "sonner";
-import { errToString } from "@shared/utils/error";
 import Button from "~/components/Button";
 import Empty from "~/components/Empty";
 import Heading from "~/components/Heading";
+import RequestAccessDialog from "~/components/RequestAccessDialog";
 import Scene from "~/components/Scene";
 import { navigateToHome } from "~/actions/definitions/navigation";
 import { HStack } from "~/components/primitives/HStack";
 import { VStack } from "~/components/primitives/VStack";
+import useCurrentUser from "~/hooks/useCurrentUser";
+import useStores from "~/hooks/useStores";
 import Loading from "~/scenes/Document/components/Loading";
 import { client } from "~/utils/ApiClient";
 
 type Props = {
   /** The document ID to request access to. */
   documentId?: string;
+  /** Whether the inaccessible resource is a collection rather than a document. */
+  isCollection?: boolean;
 };
 
-const Error403 = ({ documentId }: Props) => {
+const Error403 = ({ documentId, isCollection }: Props) => {
   const { t } = useTranslation();
   const location = useLocation<{ title?: string }>();
   const history = useHistory();
-  const [requesting, setRequesting] = useState(false);
+  const { dialogs } = useStores();
+  const user = useCurrentUser({ rejectOnEmpty: false });
+  const canRequest = !!documentId && !!user;
   const [requested, setRequested] = useState(false);
-  const [loading, setLoading] = useState(!!documentId);
+  const [loading, setLoading] = useState(canRequest);
 
   useEffect(() => {
-    if (!documentId) {
+    if (!documentId || !user) {
       return;
     }
 
@@ -45,24 +50,23 @@ const Error403 = ({ documentId }: Props) => {
     };
 
     void checkRequested();
-  }, [documentId]);
+  }, [documentId, user]);
 
-  const handleRequestAccess = useCallback(async () => {
-    if (!documentId || requesting || requested) {
+  const handleRequestAccess = useCallback(() => {
+    if (!documentId || requested) {
       return;
     }
 
-    setRequesting(true);
-    try {
-      await client.post("/accessRequests.create", { documentId });
-      setRequested(true);
-      toast.success(t("Access request sent"));
-    } catch (err) {
-      toast.error(errToString(err));
-    } finally {
-      setRequesting(false);
-    }
-  }, [documentId, t, requested, requesting]);
+    dialogs.openModal({
+      title: t("Request access"),
+      content: (
+        <RequestAccessDialog
+          documentId={documentId}
+          onRequested={() => setRequested(true)}
+        />
+      ),
+    });
+  }, [dialogs, documentId, requested, t]);
 
   const handleGoBack = useCallback(() => history.goBack(), [history]);
 
@@ -70,9 +74,13 @@ const Error403 = ({ documentId }: Props) => {
     return <Loading location={location} />;
   }
 
+  const title = isCollection
+    ? t("No access to this collection")
+    : t("No access to this doc");
+
   return (
-    <Scene title={t("No access to this doc")}>
-      <Heading>{t("No access to this doc")}</Heading>
+    <Scene title={title}>
+      <Heading>{title}</Heading>
       <VStack spacing={20} style={{ maxWidth: 500 }} align="initial">
         {requested ? (
           <Empty size="large">
@@ -82,26 +90,26 @@ const Error403 = ({ documentId }: Props) => {
           </Empty>
         ) : (
           <Empty size="large">
-            {t(
-              "It doesn't look like you have permission to access this document. You can request access."
-            )}
+            {isCollection
+              ? t(
+                  "It doesn't look like you have permission to access this collection."
+                )
+              : t(
+                  "It doesn't look like you have permission to access this document. You can request access."
+                )}
           </Empty>
         )}
         <HStack gap={8}>
-          {documentId && (
+          {canRequest && (
             <Button
               onClick={handleRequestAccess}
-              disabled={requesting || requested}
-              neutral={requesting || requested}
+              disabled={requested}
+              neutral={requested}
             >
-              {requested
-                ? t("Access requested")
-                : requesting
-                  ? t("Requesting…")
-                  : t("Request access")}
+              {requested ? t("Access requested") : t("Request access")}
             </Button>
           )}
-          <Button action={navigateToHome} hideIcon neutral={!!documentId}>
+          <Button action={navigateToHome} hideIcon neutral={canRequest}>
             {t("Home")}
           </Button>
           <Button onClick={handleGoBack} neutral>

@@ -1173,7 +1173,21 @@ describe("#collections.info", () => {
         id: collection.id,
       },
     });
+    const body = await res.json();
     expect(res.status).toEqual(403);
+    expect(body.error).toEqual("authorization_error");
+  });
+
+  it("should return not found if collection doesn't exist", async () => {
+    const user = await buildUser();
+    const res = await server.post("/api/collections.info", user, {
+      body: {
+        id: "9bcbf864-1090-4eb6-ba05-4da0c3a5c58e",
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(404);
+    expect(body.error).toEqual("not_found");
   });
 
   it("should allow user member of collection", async () => {

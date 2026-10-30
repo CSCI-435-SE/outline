@@ -247,7 +247,7 @@ function DataLoader({ match, children }: Props) {
   }
 
   if (can.read === false) {
-    return <Error404 />;
+    return <Error403 documentId={documentSlug} />;
   }
 
   if (!document || (revisionId && !revision)) {

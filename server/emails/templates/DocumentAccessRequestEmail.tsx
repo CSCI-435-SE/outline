@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Document, User } from "@server/models";
+import { AccessRequest, Document, User } from "@server/models";
 import type { EmailProps } from "./BaseEmail";
 import BaseEmail, { EmailMessageCategory } from "./BaseEmail";
 import Body from "./components/Body";
@@ -11,12 +11,14 @@ import Heading from "./components/Heading";
 type InputProps = EmailProps & {
   documentId: string;
   actorId: string;
+  accessRequestId: string;
   teamUrl: string;
 };
 
 type BeforeSend = {
   document: Document;
   actor: User;
+  reason: string | null;
 };
 
 type Props = InputProps & BeforeSend;
@@ -32,7 +34,11 @@ export default class DocumentAccessRequestEmail extends BaseEmail<
     return EmailMessageCategory.Notification;
   }
 
-  protected async beforeSend({ documentId, actorId }: InputProps) {
+  protected async beforeSend({
+    documentId,
+    actorId,
+    accessRequestId,
+  }: InputProps) {
     const document = await Document.unscoped().findByPk(documentId);
     if (!document) {
       return false;
@@ -43,7 +49,10 @@ export default class DocumentAccessRequestEmail extends BaseEmail<
       return false;
     }
 
-    return { document, actor };
+    const accessRequest =
+      await AccessRequest.unscoped().findByPk(accessRequestId);
+
+    return { document, actor, reason: accessRequest?.reason ?? null };
   }
 
   protected subject({ actor, document }: Props) {
@@ -58,16 +67,16 @@ export default class DocumentAccessRequestEmail extends BaseEmail<
     return actor.name;
   }
 
-  protected renderAsText({ actor, teamUrl, document }: Props): string {
+  protected renderAsText({ actor, teamUrl, document, reason }: Props): string {
     return `
 ${actor.name} is requesting access to "${document.titleWithDefault}".
-
+${reason ? `\nReason: ${reason}\n` : ""}
 Open the document to share it with them: ${teamUrl}${document.path}
 `;
   }
 
   protected render(props: Props) {
-    const { document, actor, teamUrl } = props;
+    const { document, actor, teamUrl, reason } = props;
     const documentUrl = `${teamUrl}${document.path}?ref=notification-email&notifications=true`;
 
     return (
@@ -83,6 +92,11 @@ Open the document to share it with them: ${teamUrl}${document.path}
             {actor.name} is requesting access to the{" "}
             <a href={documentUrl}>{document.titleWithDefault}</a> document.
           </p>
+          {reason && (
+            <p>
+              <strong>Reason:</strong> {reason}
+            </p>
+          )}
           <p>Open the document to share it with them.</p>
           <p>
             <Button href={documentUrl}>View Document</Button>
