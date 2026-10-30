@@ -222,7 +222,9 @@ describe("#documents.info", () => {
         id: document.id,
       },
     });
+    const body = await res.json();
     expect(res.status).toEqual(403);
+    expect(body.error).toEqual("authorization_error");
   });
 
   it("should return drafts", async () => {
@@ -568,7 +570,9 @@ describe("#documents.info", () => {
         id: "9bcbf864-1090-4eb6-ba05-4da0c3a5c58e",
       },
     });
+    const body = await res.json();
     expect(res.status).toEqual(404);
+    expect(body.error).toEqual("not_found");
   });
 
   it("should require authorization without token", async () => {

@@ -32,6 +32,11 @@ export const AttachmentValidation = {
   ],
 };
 
+export const AccessRequestValidation = {
+  /** The maximum length of the reason given when requesting access */
+  maxReasonLength: 1000,
+};
+
 export const ApiKeyValidation = {
   /** The minimum length of the API key name */
   minNameLength: 3,

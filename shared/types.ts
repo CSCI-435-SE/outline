@@ -449,6 +449,7 @@ export enum TeamPreference {
   MCP = "mcp",
   /** List of disabled embed provider titles. */
   DisabledEmbeds = "disabledEmbeds",
+  StalenessThreshold = "stalenessThreshold",
 }
 
 export type TeamPreferences = {
@@ -466,6 +467,7 @@ export type TeamPreferences = {
   [TeamPreference.EmailDisplay]?: EmailDisplay;
   [TeamPreference.MCP]?: boolean;
   [TeamPreference.DisabledEmbeds]?: string[];
+  [TeamPreference.StalenessThreshold]?: number;
 };
 
 export enum NavigationNodeType {

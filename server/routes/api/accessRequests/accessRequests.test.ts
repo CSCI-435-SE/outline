@@ -1,4 +1,5 @@
 import { CollectionPermission, DocumentPermission } from "@shared/types";
+import { AccessRequestValidation } from "@shared/validations";
 import { AccessRequest, UserMembership } from "@server/models";
 import { AccessRequestStatus } from "@server/models/AccessRequest";
 import {
@@ -68,6 +69,64 @@ describe("#accessRequests.create", () => {
     expect(res.status).toEqual(200);
     expect(body.data.documentId).toEqual(document.id);
     expect(body.data.userId).toEqual(requester.id);
+    expect(body.data.reason).toBeNull();
+  });
+
+  it("should store the reason provided", async () => {
+    const team = await buildTeam();
+    const owner = await buildUser({ teamId: team.id });
+    const requester = await buildUser({ teamId: team.id });
+    const collection = await buildCollection({
+      teamId: team.id,
+      userId: owner.id,
+      permission: null,
+    });
+    const document = await buildDocument({
+      teamId: team.id,
+      createdById: owner.id,
+      collectionId: collection.id,
+    });
+
+    const res = await server.post("/api/accessRequests.create", requester, {
+      body: {
+        documentId: document.id,
+        reason: "  I need to review the onboarding steps  ",
+      },
+    });
+    const body = await res.json();
+
+    expect(res.status).toEqual(200);
+    expect(body.data.reason).toEqual("I need to review the onboarding steps");
+
+    const accessRequest = await AccessRequest.findByPk(body.data.id);
+    expect(accessRequest?.reason).toEqual(
+      "I need to review the onboarding steps"
+    );
+  });
+
+  it("should reject a reason that is too long", async () => {
+    const team = await buildTeam();
+    const owner = await buildUser({ teamId: team.id });
+    const requester = await buildUser({ teamId: team.id });
+    const collection = await buildCollection({
+      teamId: team.id,
+      userId: owner.id,
+      permission: null,
+    });
+    const document = await buildDocument({
+      teamId: team.id,
+      createdById: owner.id,
+      collectionId: collection.id,
+    });
+
+    const res = await server.post("/api/accessRequests.create", requester, {
+      body: {
+        documentId: document.id,
+        reason: "a".repeat(AccessRequestValidation.maxReasonLength + 1),
+      },
+    });
+
+    expect(res.status).toEqual(400);
   });
 
   it("should reject if user already has access", async () => {
@@ -311,6 +370,8 @@ describe("#accessRequests.approve", () => {
     });
     expect(membership).toBeTruthy();
     expect(membership?.permission).toEqual(DocumentPermission.ReadWrite);
+    // Placed in the "Shared with me" section like documents.add_user
+    expect(membership?.index).toBeTruthy();
   });
 
   it("should allow a document manager who is not a workspace admin to approve", async () => {
@@ -394,7 +455,7 @@ describe("#accessRequests.approve", () => {
     expect(res.status).toEqual(403);
   });
 
-  it("should be a no-op when user already has membership", async () => {
+  it("should update permission when user already has membership", async () => {
     const team = await buildTeam();
     const requester = await buildUser({ teamId: team.id });
     const admin = await buildAdmin({ teamId: team.id });
@@ -426,7 +487,7 @@ describe("#accessRequests.approve", () => {
 
     expect(res.status).toEqual(200);
 
-    // Existing membership is unchanged.
+    // Existing membership is updated rather than duplicated.
     const memberships = await UserMembership.findAll({
       where: {
         userId: requester.id,
@@ -434,7 +495,7 @@ describe("#accessRequests.approve", () => {
       },
     });
     expect(memberships).toHaveLength(1);
-    expect(memberships[0].permission).toEqual(DocumentPermission.Read);
+    expect(memberships[0].permission).toEqual(DocumentPermission.ReadWrite);
   });
 
   it("should not allow approving requests that have been responded to", async () => {

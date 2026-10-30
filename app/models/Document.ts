@@ -2,6 +2,7 @@ import { addDays, differenceInDays } from "date-fns";
 import i18n, { t } from "i18next";
 import { capitalize, floor } from "es-toolkit/compat";
 import { action, autorun, comparer, computed, observable, set } from "mobx";
+import { TeamPreference } from "@shared/types";
 import type {
   JSONObject,
   NavigationNode,
@@ -341,10 +342,14 @@ export default class Document extends ArchivableModel implements Searchable {
    */
   @computed
   get isStale(): boolean {
+    const team = this.store?.rootStore?.auth?.team;
+    const threshold = team?.getPreference(TeamPreference.StalenessThreshold) as
+      | number
+      | undefined;
     return (
       !!this.publishedAt &&
       !this.isArchived &&
-      isStale(getStalenessDate(this.lastEditedAt, this.reviewedAt))
+      isStale(getStalenessDate(this.lastEditedAt, this.reviewedAt), threshold)
     );
   }
 
