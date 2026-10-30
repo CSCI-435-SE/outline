@@ -41,6 +41,7 @@ const WEBHOOK_EVENTS = {
     "documents.permanent_delete",
     "documents.archive",
     "documents.unarchive",
+    "documents.review",
     "documents.restore",
     "documents.move",
     "documents.update",

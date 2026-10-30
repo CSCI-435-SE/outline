@@ -8,6 +8,7 @@ import {
   RestoreIcon,
   UserIcon,
   CrossIcon,
+  DoneIcon,
 } from "outline-icons";
 import { useTranslation } from "react-i18next";
 import styled, { css } from "styled-components";
@@ -73,6 +74,11 @@ const EventListItem = ({ item }: Props) => {
     case "documents.unpublish":
       icon = <UnpublishIcon />;
       meta = t("{{userName}} unpublished", opts);
+      break;
+
+    case "documents.review":
+      icon = <DoneIcon />;
+      meta = t("{{userName}} marked as reviewed", opts);
       break;
 
     case "documents.move":

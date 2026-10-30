@@ -19,6 +19,7 @@ import {
   TrashIcon,
   CrossIcon,
   ArchiveIcon,
+  DoneIcon,
   ShuffleIcon,
   HistoryIcon,
   GraphIcon,
@@ -1287,6 +1288,37 @@ export const archiveDocument = createAction({
         content: <DocumentArchiveDialog document={document} />,
       });
     }
+  },
+});
+
+export const markDocumentAsReviewed = createAction({
+  name: ({ t }) => t("Mark as reviewed"),
+  analyticsName: "Mark document as reviewed",
+  section: ActiveDocumentSection,
+  icon: <DoneIcon />,
+  visible: ({ activeDocumentId, stores }) => {
+    if (!activeDocumentId) {
+      return false;
+    }
+    return !!stores.policies.abilities(activeDocumentId).markReviewed;
+  },
+  perform: async ({ activeDocumentId, stores, t }) => {
+    if (!activeDocumentId) {
+      return;
+    }
+
+    const document = stores.documents.get(activeDocumentId);
+    if (!document) {
+      return;
+    }
+
+    await document.review();
+
+    toast.success(
+      t("Marked {{ documentName }} as reviewed", {
+        documentName: document.noun,
+      })
+    );
   },
 });
 

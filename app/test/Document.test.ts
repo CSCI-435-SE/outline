@@ -137,5 +137,85 @@ describe("Document model", () => {
       );
       expect(document.isStale).toBe(false);
     });
+
+    test("should not be stale when reviewed within the threshold", () => {
+      const document = new Document(
+        {
+          id: "stale-6",
+          title: "Test",
+          publishedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 100),
+          lastEditedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 50),
+          reviewedAt: daysAgo(1),
+        },
+        documents
+      );
+      expect(document.isStale).toBe(false);
+    });
+
+    test("should be stale again when the review is older than the threshold", () => {
+      const document = new Document(
+        {
+          id: "stale-7",
+          title: "Test",
+          publishedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 100),
+          lastEditedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 50),
+          reviewedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 1),
+        },
+        documents
+      );
+      expect(document.isStale).toBe(true);
+    });
+
+    test("should stop being stale after marking as reviewed", () => {
+      const document = new Document(
+        {
+          id: "stale-8",
+          title: "Test",
+          publishedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 100),
+          lastEditedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 1),
+        },
+        documents
+      );
+      expect(document.isStale).toBe(true);
+
+      document.updateData({ reviewedAt: new Date().toISOString() });
+      expect(document.isStale).toBe(false);
+    });
+  });
+
+  describe("isReviewedSinceEdit", () => {
+    test("should be false when the document was never reviewed", () => {
+      const document = new Document(
+        { id: "reviewed-1", title: "Test", lastEditedAt: "2026-01-01" },
+        documents
+      );
+      expect(document.isReviewedSinceEdit).toBe(false);
+    });
+
+    test("should be true when the review is newer than the last edit", () => {
+      const document = new Document(
+        {
+          id: "reviewed-2",
+          title: "Test",
+          lastEditedAt: "2026-01-01T00:00:00.000Z",
+          reviewedAt: "2026-02-01T00:00:00.000Z",
+        },
+        documents
+      );
+      expect(document.isReviewedSinceEdit).toBe(true);
+    });
+
+    test("should be false when the document was edited after the review", () => {
+      const document = new Document(
+        {
+          id: "reviewed-3",
+          title: "Test",
+          lastEditedAt: "2026-03-01T00:00:00.000Z",
+          reviewedAt: "2026-02-01T00:00:00.000Z",
+        },
+        documents
+      );
+      expect(document.isReviewedSinceEdit).toBe(false);
+    });
   });
 });

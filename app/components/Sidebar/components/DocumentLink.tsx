@@ -9,6 +9,7 @@ import type { NavigationNode } from "@shared/types";
 import { DocumentPermission, UserPreference } from "@shared/types";
 import { ProsemirrorHelper } from "@shared/utils/ProsemirrorHelper";
 import { sortNavigationNodes } from "@shared/utils/collections";
+import { getStalenessDate } from "@shared/utils/getStalenessDate";
 import { isStale } from "@shared/utils/isStale";
 import type Collection from "~/models/Collection";
 import type Document from "~/models/Document";
@@ -386,10 +387,10 @@ const DocumentLinkInner = observer(function DocumentLinkInner({
     !!document?.isBadgedNew && document.createdBy?.id !== user.id;
 
   // prefer the loaded document as it reflects edits immediately, otherwise
-  // fall back to the edit date stored in the collection structure.
+  // fall back to the edit and review dates stored in the collection structure.
   const staleBadge = document
     ? document.isStale
-    : !isDraft && isStale(node.lastEditedAt);
+    : !isDraft && isStale(getStalenessDate(node.lastEditedAt, node.reviewedAt));
 
   const showMenuActions = !isDraggingAnyDocument;
   const menu =

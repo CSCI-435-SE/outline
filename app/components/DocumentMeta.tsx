@@ -144,6 +144,22 @@ const DocumentMeta: React.FC<Props> = ({
     : 0;
   const canShowProgressBar = isTasks;
 
+  // A review newer than the last edit is the latest confirmation that the
+  // document is accurate, show it alongside the update.
+  const reviewed =
+    !revision &&
+    !deletedAt &&
+    !archivedAt &&
+    !isDraft &&
+    document.isReviewedSinceEdit &&
+    document.reviewedAt ? (
+      <span>
+        <Separator />
+        {t("Reviewed")}{" "}
+        <Time dateTime={document.reviewedAt} addSuffix shorten />
+      </span>
+    ) : null;
+
   const timeSinceNow = () => {
     if (isDraft || !showLastViewed) {
       return null;
@@ -183,6 +199,7 @@ const DocumentMeta: React.FC<Props> = ({
       ) : (
         content
       )}
+      {reviewed}
       {showCollection && collection && (
         <span>
           &nbsp;{t("in")}&nbsp;

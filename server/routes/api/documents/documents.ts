@@ -1450,6 +1450,32 @@ router.post(
 );
 
 router.post(
+  "documents.review",
+  auth(),
+  validate(T.DocumentsMarkReviewedSchema),
+  transaction(),
+  async (ctx: APIContext<T.DocumentsMarkReviewedReq>) => {
+    const { id } = ctx.input.body;
+    const { user } = ctx.state.auth;
+    const { transaction } = ctx.state;
+
+    const document = await Document.findByPk(id, {
+      userId: user.id,
+      rejectOnEmpty: true,
+      transaction,
+    });
+    authorize(user, "markReviewed", document);
+
+    await document.reviewWithCtx(ctx);
+
+    ctx.body = {
+      data: await presentDocument(ctx, document),
+      policies: presentPolicies(user, [document]),
+    };
+  }
+);
+
+router.post(
   "documents.request_review",
   auth(),
   validate(T.DocumentsRequestReviewSchema),

@@ -13,6 +13,8 @@
 4. "tests look good" — I reviewed the tests.
 5. "git add and commit", then `git push -u origin feat/issue-61-Add-mark-as-reviewed-action-on-documents`.
 6. "add ai log" — this file.
+7. "my issue 61 has merge conflicts and bugs: a review increases the document's revision count and every review rewrites the collection's sidebar tree" — reported after the PR was opened (see "Follow-up fixes").
+8. "yes" — approved committing and pushing the fixes and updating this log.
 
 ## Research performed
 
@@ -29,9 +31,9 @@
 ## Design decisions
 
 - **New fields:** `reviewedAt` and `reviewedById` on documents, separate from the review-workflow fields to avoid name collisions.
-- **No fake edit:** the review is saved with `silent: true` and a `review` event name, so it doesn't create a revision or change `updatedAt` or `lastEditedAt`.
+- **No fake edit:** the review is saved with `silent: true` and a `review` event name, so it doesn't create a revision or change `updatedAt` or `lastEditedAt`. After the follow-up fix, it doesn't change `revisionCount` either.
 - **Staleness:** measured from the later of the last edit and the last review. This logic is in a new `shared/utils/getStalenessDate.ts`, and `isStale()` is unchanged, to avoid a merge conflict with #62.
-- **Sidebar:** `reviewedAt` is stored in the collection structure, so the badge clears even when the document isn't loaded. A review always refreshes the structure.
+- **Sidebar:** `reviewedAt` is stored in the collection structure, so the badge clears even when the document isn't loaded. After the follow-up fix, a review refreshes the structure at most once a day, the same as edits.
 - **Live updates:** other viewers receive the review as a `documents.update` socket message, which the client already handles.
 - **Permissions:** a new `review` policy requires a published document the user can `update`. That rules out viewers, other teams, drafts, and archived or deleted documents.
 - **Answers to the issue's open questions (approved by me):**
@@ -71,3 +73,18 @@
 - Claude started my local Docker Postgres and Redis containers and ran the migration on the test database only.
 - The four related existing suites (documents API, events API, document policies, document model) passed: 376 tests. The client `Document` tests passed. `yarn tsc` and oxlint were clean.
 - Tested by hand in the browser after running `yarn db:migrate` on the dev database.
+
+## Follow-up fixes
+
+After the PR was opened, I found a merge conflict with `main` and two bugs.
+
+- **Merge conflict:** my teammate's #62 (configurable staleness threshold) was merged into `main` and changed the client `isStale` in `app/models/Document.ts`. Claude merged `main` into the branch rather than rebasing, because the branch was already pushed. The resolved `isStale` uses both #62's workspace threshold and the later of the last edit and the last review.
+- **A review increased the revision count:** the `processUpdate` hook adds 1 to `revisionCount` on every document update, and the review save went through it. The original test only checked the `revisions` table, so it missed this. Fix: `Document.isReviewOnlyChange()` skips the increment when only `reviewedAt` and `reviewedById` changed.
+- **Every review rewrote the sidebar tree:** I had made every review refresh the collection's `documentStructure`, while edits are limited to once a day. Fix: reviews use the same once-a-day throttle (`shouldRefreshStructureEditDate`). Staleness is measured in days, so a review date in the sidebar that's up to a day old never changes the result.
+- **Tests:** added 3 regression tests:
+  - a review doesn't change `revisionCount`
+  - an edit after a review still increments it
+  - a repeat review within a day doesn't rewrite the structure, while one more than a day later does
+
+  Claude temporarily removed each fix to confirm the new tests fail without it. With the fixes: 394 server tests (documents and teams APIs, events, document policies, document model), 15 client tests and 22 shared tests pass. `yarn tsc` and oxlint are clean.
+- **Migration timestamp:** my migration shares the timestamp `20261029000000` with `add-reason-to-access-requests`, which came from `main`. They touch different tables and both run, so mine wasn't renamed; it had already run on the dev and test databases.

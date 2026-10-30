@@ -429,6 +429,11 @@ class Document extends ArchivableModel<
   @SkipChangeset
   lastEditedAt: Date | null;
 
+  /** When a user last confirmed the document is still accurate without editing it. */
+  @IsDate
+  @Column(DataType.DATE)
+  reviewedAt: Date | null;
+
   /** An array of user IDs that have edited this document. */
   @Column(DataType.ARRAY(DataType.UUID))
   collaboratorIds: string[];
@@ -492,6 +497,22 @@ class Document extends ArchivableModel<
     return !previous || Date.now() - new Date(previous).getTime() >= Day.ms;
   }
 
+  /**
+   * Whether the only pending changes to the document are from marking it as
+   * reviewed, so the save should not be treated as an edit.
+   *
+   * @param model The document being saved.
+   * @returns True if only the review fields have changed.
+   */
+  static isReviewOnlyChange(model: Document) {
+    const changed = model.changed();
+    return (
+      Array.isArray(changed) &&
+      changed.length > 0 &&
+      changed.every((key) => key === "reviewedAt" || key === "reviewedById")
+    );
+  }
+
   // hooks
 
   // Note: this hook must be declared before updateCollectionStructure and
@@ -516,9 +537,15 @@ class Document extends ArchivableModel<
     model: Document,
     { transaction }: SaveOptions<InferAttributes<Document>>
   ) {
+    // staleness is measured in days, so like edits a review only needs to
+    // refresh the structure at most once a day.
     const editDateChanged =
-      model.changed("lastEditedAt") &&
-      Document.shouldRefreshStructureEditDate(model.previous("lastEditedAt"));
+      (model.changed("lastEditedAt") &&
+        Document.shouldRefreshStructureEditDate(
+          model.previous("lastEditedAt")
+        )) ||
+      (model.changed("reviewedAt") &&
+        Document.shouldRefreshStructureEditDate(model.previous("reviewedAt")));
 
     // templates, drafts, and archived documents don't appear in the structure
     // and so never need to be updated when the title changes
@@ -586,6 +613,10 @@ class Document extends ArchivableModel<
 
   @BeforeUpdate
   static async processUpdate(model: Document) {
+    // a review only confirms the document is still accurate, it does not
+    // change the document and so is not a new revision.
+    const isReviewOnly = Document.isReviewOnlyChange(model);
+
     // ensure documents have a title
     model.title = model.title || "";
 
@@ -614,7 +645,9 @@ class Document extends ArchivableModel<
     );
 
     // increment revision
-    model.revisionCount += 1;
+    if (!isReviewOnly) {
+      model.revisionCount += 1;
+    }
   }
 
   @BeforeUpdate
@@ -703,6 +736,13 @@ class Document extends ArchivableModel<
 
   @BelongsTo(() => User, "lastModifiedById")
   updatedBy: User;
+
+  @BelongsTo(() => User, "reviewedById")
+  reviewedBy: User | null;
+
+  @ForeignKey(() => User)
+  @Column(DataType.UUID)
+  reviewedById: string | null;
 
   @ForeignKey(() => User)
   @Column(DataType.UUID)
@@ -1326,6 +1366,23 @@ class Document extends ArchivableModel<
   };
 
   /**
+   * Marks the document as reviewed, confirming it is still accurate without
+   * editing it. This resets the stale clock and records a "documents.review"
+   * event, but does not create a revision or change when the document was
+   * last updated or edited.
+   *
+   * @param ctx The API context of the user reviewing the document.
+   * @returns The updated document.
+   */
+  reviewWithCtx = async (ctx: APIContext) => {
+    const { user } = ctx.state.auth;
+    this.reviewedAt = new Date();
+    this.reviewedById = user.id;
+    await this.saveWithCtx(ctx, { silent: true }, { name: "review" });
+    return this;
+  };
+
+  /**
    * Request a review of this document, replacing any existing reviewer.
    *
    * @param ctx The API context, the authenticated user is the requester.
@@ -1514,6 +1571,7 @@ class Document extends ArchivableModel<
       icon: isNil(this.icon) ? undefined : this.icon,
       color: isNil(this.color) ? undefined : this.color,
       lastEditedAt: this.lastEditedAt?.toISOString(),
+      reviewedAt: this.reviewedAt?.toISOString(),
       children,
     };
   };

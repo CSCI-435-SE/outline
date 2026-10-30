@@ -192,6 +192,7 @@ export default class DeliverWebhookTask extends BaseTask<Props> {
       case "documents.permanent_delete":
       case "documents.archive":
       case "documents.unarchive":
+      case "documents.review":
       case "documents.restore":
       case "documents.move":
       case "documents.update":
