@@ -23,7 +23,7 @@ router.post(
   validate(T.AccessRequestsCreateSchema),
   transaction(),
   async (ctx: APIContext<T.AccessRequestsCreateReq>) => {
-    const { documentId } = ctx.input.body;
+    const { documentId, reason } = ctx.input.body;
     const { user } = ctx.state.auth;
     const { transaction } = ctx.state;
 
@@ -44,6 +44,7 @@ router.post(
       documentId: document.id,
       teamId: user.teamId,
       userId: user.id,
+      reason: reason || null,
       status: AccessRequestStatus.Pending,
     });
 

@@ -14,11 +14,13 @@ import {
   DefaultScope,
   BeforeCreate,
 } from "sequelize-typescript";
+import { AccessRequestValidation } from "@shared/validations";
 import Document from "./Document";
 import Team from "./Team";
 import User from "./User";
 import Fix from "./decorators/Fix";
 import IdModel from "./base/IdModel";
+import Length from "./validators/Length";
 import { IsIn } from "class-validator";
 import { ValidationError } from "@server/errors";
 import type { APIContext } from "@server/types";
@@ -58,6 +60,14 @@ class AccessRequest extends IdModel<
   @AllowNull
   @Column(DataType.DATE)
   respondedAt: Date | null;
+
+  @AllowNull
+  @Length({
+    max: AccessRequestValidation.maxReasonLength,
+    msg: `Reason must be ${AccessRequestValidation.maxReasonLength} characters or less`,
+  })
+  @Column(DataType.TEXT)
+  reason: string | null;
 
   // associations
   @BelongsTo(() => Document, "documentId")

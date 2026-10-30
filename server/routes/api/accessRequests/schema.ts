@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DocumentPermission } from "@shared/types";
+import { AccessRequestValidation } from "@shared/validations";
 import { BaseSchema } from "@server/routes/api/schema";
 import { zodIdType } from "@server/utils/zod";
 
@@ -10,6 +11,11 @@ const BaseIdSchema = z.object({
 export const AccessRequestsCreateSchema = BaseSchema.extend({
   body: z.object({
     documentId: zodIdType(),
+    reason: z
+      .string()
+      .trim()
+      .max(AccessRequestValidation.maxReasonLength)
+      .optional(),
   }),
 });
 

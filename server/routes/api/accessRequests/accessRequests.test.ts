@@ -1,4 +1,5 @@
 import { CollectionPermission, DocumentPermission } from "@shared/types";
+import { AccessRequestValidation } from "@shared/validations";
 import { AccessRequest, UserMembership } from "@server/models";
 import { AccessRequestStatus } from "@server/models/AccessRequest";
 import {
@@ -68,6 +69,64 @@ describe("#accessRequests.create", () => {
     expect(res.status).toEqual(200);
     expect(body.data.documentId).toEqual(document.id);
     expect(body.data.userId).toEqual(requester.id);
+    expect(body.data.reason).toBeNull();
+  });
+
+  it("should store the reason provided", async () => {
+    const team = await buildTeam();
+    const owner = await buildUser({ teamId: team.id });
+    const requester = await buildUser({ teamId: team.id });
+    const collection = await buildCollection({
+      teamId: team.id,
+      userId: owner.id,
+      permission: null,
+    });
+    const document = await buildDocument({
+      teamId: team.id,
+      createdById: owner.id,
+      collectionId: collection.id,
+    });
+
+    const res = await server.post("/api/accessRequests.create", requester, {
+      body: {
+        documentId: document.id,
+        reason: "  I need to review the onboarding steps  ",
+      },
+    });
+    const body = await res.json();
+
+    expect(res.status).toEqual(200);
+    expect(body.data.reason).toEqual("I need to review the onboarding steps");
+
+    const accessRequest = await AccessRequest.findByPk(body.data.id);
+    expect(accessRequest?.reason).toEqual(
+      "I need to review the onboarding steps"
+    );
+  });
+
+  it("should reject a reason that is too long", async () => {
+    const team = await buildTeam();
+    const owner = await buildUser({ teamId: team.id });
+    const requester = await buildUser({ teamId: team.id });
+    const collection = await buildCollection({
+      teamId: team.id,
+      userId: owner.id,
+      permission: null,
+    });
+    const document = await buildDocument({
+      teamId: team.id,
+      createdById: owner.id,
+      collectionId: collection.id,
+    });
+
+    const res = await server.post("/api/accessRequests.create", requester, {
+      body: {
+        documentId: document.id,
+        reason: "a".repeat(AccessRequestValidation.maxReasonLength + 1),
+      },
+    });
+
+    expect(res.status).toEqual(400);
   });
 
   it("should reject if user already has access", async () => {
