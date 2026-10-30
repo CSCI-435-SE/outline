@@ -7,10 +7,12 @@ import EventBoundary from "@shared/components/EventBoundary";
 import { ellipsis, hover, s } from "@shared/styles";
 import { isMobile } from "@shared/utils/browser";
 import { STALE_DOCUMENT_THRESHOLD_DAYS } from "@shared/utils/isStale";
+import { TeamPreference } from "@shared/types";
 import NudeButton from "~/components/NudeButton";
 import Tooltip from "~/components/Tooltip";
 import { UnreadBadge } from "~/components/UnreadBadge";
 import useClickIntent from "~/hooks/useClickIntent";
+import useCurrentTeam from "~/hooks/useCurrentTeam";
 import { undraggableOnDesktop } from "~/styles";
 import Disclosure from "./Disclosure";
 import type { Props as NavLinkProps } from "./NavLink";
@@ -19,50 +21,26 @@ import type { ActionWithChildren } from "~/types";
 import { ContextMenu } from "~/components/Menu/ContextMenu";
 import { useTranslation } from "react-i18next";
 
-/**
- * Props for the SidebarLink component.
- * Extends NavLink props with additional sidebar-specific functionality.
- */
 type Props = Omit<NavLinkProps, "to"> & {
-  /** The location to navigate to when the link is clicked */
   to?: LocationDescriptor;
-  /** Ref callback to access the underlying HTML element */
   innerRef?: (ref: HTMLElement | null | undefined) => void;
-  /** Callback fired when the link is clicked */
   onClick?: React.MouseEventHandler<HTMLAnchorElement>;
-  /** Callback when we expect the user to click on the link. Used for prefetching data. */
   onClickIntent?: React.MouseEventHandler<HTMLElement>;
-  /** Callback fired when the disclosure icon is clicked */
   onDisclosureClick?: React.MouseEventHandler<HTMLElement>;
-  /** Icon to display on the left side of the link */
   icon?: React.ReactNode;
-  /** Text label or content to display for the link */
   label?: React.ReactNode;
-  /** Optional menu to display on hover or interaction */
   menu?: React.ReactNode;
-  /** Whether to show an unread badge indicator */
   unreadBadge?: boolean;
-  /** Whether to show an indicator that the document has not been edited recently */
   staleBadge?: boolean;
-  /** Whether to show action buttons on hover */
   $showActions?: boolean;
-  /** Whether the link is disabled and non-interactive */
   disabled?: boolean;
-  /** Whether the link is currently active */
   active?: boolean;
-  /** If set, a disclosure will be rendered to the left of any icon */
   expanded?: boolean;
-  /** Whether this link is the current active drop target for drag and drop */
   isActiveDrop?: boolean;
-  /** Whether this link represents a draft document */
   isDraft?: boolean;
-  /** Nesting depth level for indentation (0-based) */
   depth?: number;
-  /** Whether to truncate the label text (default: true, causes overflow: hidden) */
   ellipsis?: boolean;
-  /** Whether to automatically scroll this link into view if needed */
   scrollIntoViewIfNeeded?: boolean;
-  /** Optional context menu action to display */
   contextAction?: ActionWithChildren;
 };
 
@@ -70,9 +48,6 @@ const activeDropStyle = {
   fontWeight: 600,
 };
 
-// Prevents the parent NavLink's mousedown handler from firing (which would
-// navigate or toggle), without calling preventDefault — that would block the
-// native HTML5 drag from initiating on the draggable row.
 const stopPropagation = (ev: React.MouseEvent) => {
   ev.stopPropagation();
 };
@@ -107,6 +82,11 @@ function SidebarLink(
   const hasDisclosure = expanded !== undefined;
   const { t } = useTranslation();
   const theme = useTheme();
+  const team = useCurrentTeam({ rejectOnEmpty: false });
+  const stalenessThreshold =
+    (team?.getPreference(TeamPreference.StalenessThreshold) as
+      | number
+      | undefined) ?? STALE_DOCUMENT_THRESHOLD_DAYS;
   const { handleMouseEnter, handleMouseLeave } = useClickIntent(onClickIntent);
   const style = React.useMemo(
     () => ({
@@ -155,7 +135,7 @@ function SidebarLink(
 
   const DisclosureComponent = icon ? HiddenDisclosure : Disclosure;
   const staleLabel = t("Not edited in the last {{ days }} days", {
-    days: STALE_DOCUMENT_THRESHOLD_DAYS,
+    days: stalenessThreshold,
   });
   const staleIndicator =
     staleBadge && !unreadBadge ? (
@@ -186,7 +166,6 @@ function SidebarLink(
       </ContextMenu>
       {menu && (
         <Actions $showActions={$showActions}>
-          {/* repeated here as the actions cover the indicator on hover */}
           {staleIndicator}
           {menu}
         </Actions>
@@ -241,7 +220,6 @@ function SidebarLink(
   );
 }
 
-// accounts for whitespace around icon
 export const IconWrapper = styled.span`
   margin-inline-start: -4px;
   height: 24px;

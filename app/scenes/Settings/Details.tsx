@@ -68,6 +68,11 @@ function Details() {
     team.getPreference(TeamPreference.TocPosition) as TOCPosition
   );
 
+  const [stalenessThreshold, setStalenessThreshold] = useState(() => {
+    const val = team.getPreference(TeamPreference.StalenessThreshold);
+    return String(typeof val === "number" ? val : 180);
+  });
+
   const tocPositionOptions: Option[] = React.useMemo(
     () =>
       [
@@ -96,6 +101,10 @@ function Details() {
       }
 
       try {
+        team.setPreference(
+          TeamPreference.StalenessThreshold,
+          parseInt(stalenessThreshold, 10) || 180
+        );
         await team.save({
           name,
           description,
@@ -115,6 +124,7 @@ function Details() {
     },
     [
       tocPosition,
+      stalenessThreshold,
       team,
       name,
       description,
@@ -356,6 +366,22 @@ function Details() {
             <DefaultCollectionInputSelect
               onSelectCollection={onSelectCollection}
               defaultCollectionId={defaultCollectionId}
+            />
+          </SettingRow>
+          <SettingRow
+            label={t("Document staleness threshold")}
+            name="stalenessThreshold"
+            description={t(
+              "Number of days without an edit before a document is flagged as stale in the sidebar."
+            )}
+          >
+            <Input
+              id="stalenessThreshold"
+              value={stalenessThreshold}
+              onChange={(ev: React.ChangeEvent<HTMLInputElement>) => {
+                setStalenessThreshold(ev.target.value);
+              }}
+              placeholder="180"
             />
           </SettingRow>
           <SettingRow
