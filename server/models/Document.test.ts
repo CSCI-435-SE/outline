@@ -1,5 +1,9 @@
 import { EmptyResultError, Op } from "sequelize";
-import { CollectionPermission } from "@shared/types";
+import {
+  CollectionPermission,
+  DocumentReviewStatus,
+  TeamPreference,
+} from "@shared/types";
 import slugify from "@shared/utils/slugify";
 import { parser } from "@server/editor";
 import Document from "@server/models/Document";
@@ -16,6 +20,7 @@ import {
 import { withAPIContext } from "@server/test/support";
 import Collection from "./Collection";
 import UserMembership from "./UserMembership";
+import { getChangesetSkipped } from "./decorators/Changeset";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -129,6 +134,53 @@ describe("#save", () => {
     document.title = "test";
     await document.save();
     expect(document.previousTitles.length).toBe(3);
+  });
+});
+
+describe("review", () => {
+  test("should have no review state by default", async () => {
+    const document = await buildDocument();
+    expect(document.reviewStatus).toBe(null);
+    expect(document.reviewerId).toBe(null);
+    expect(document.reviewRequestedById).toBe(null);
+  });
+
+  test("should have the review workflow disabled by default", async () => {
+    const team = await buildTeam();
+    expect(team.getPreference(TeamPreference.ReviewWorkflow)).toBe(false);
+  });
+
+  test("should save a valid review status and reviewer", async () => {
+    const document = await buildDocument();
+    const reviewer = await buildUser({ teamId: document.teamId });
+    document.reviewStatus = DocumentReviewStatus.InReview;
+    document.reviewerId = reviewer.id;
+    document.reviewRequestedById = document.createdById;
+    await document.save();
+    await document.reload();
+
+    expect(document.reviewStatus).toBe(DocumentReviewStatus.InReview);
+    expect((await document.$get("reviewer"))?.id).toBe(reviewer.id);
+    expect((await document.$get("reviewRequestedBy"))?.id).toBe(
+      document.createdById
+    );
+  });
+
+  test("should reject an invalid review status", async () => {
+    const document = await buildDocument();
+    document.reviewStatus = "invalid" as DocumentReviewStatus;
+    await expect(document.save()).rejects.toThrow();
+  });
+
+  test("should not include review fields in changesets", async () => {
+    const document = await buildDocument();
+    expect(getChangesetSkipped(document)).toEqual(
+      expect.arrayContaining([
+        "reviewStatus",
+        "reviewerId",
+        "reviewRequestedById",
+      ])
+    );
   });
 });
 

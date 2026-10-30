@@ -41,6 +41,7 @@ import {
   Unique,
   AfterUpdate,
   IsFloat,
+  IsIn,
 } from "sequelize-typescript";
 import { MaxLength } from "class-validator";
 import isUUID from "validator/lib/isUUID";
@@ -51,6 +52,7 @@ import type {
   ProsemirrorData,
   SourceMetadata,
 } from "@shared/types";
+import { DocumentReviewStatus } from "@shared/types";
 import { ProsemirrorHelper } from "@shared/utils/ProsemirrorHelper";
 import { UrlHelper } from "@shared/utils/UrlHelper";
 import slugify from "@shared/utils/slugify";
@@ -321,6 +323,13 @@ class Document extends ArchivableModel<
   @Column(DataType.TEXT)
   @SkipChangeset
   archivedReason: string | null;
+
+  /** The document's position in the review workflow, null if never reviewed. */
+  @AllowNull
+  @IsIn([Object.values(DocumentReviewStatus)])
+  @Column(DataType.STRING)
+  @SkipChangeset
+  reviewStatus: DocumentReviewStatus | null;
 
   @Column(DataType.ARRAY(DataType.STRING))
   previousTitles: string[];
@@ -705,6 +714,22 @@ class Document extends ArchivableModel<
   @ForeignKey(() => User)
   @Column(DataType.UUID)
   createdById: string;
+
+  @BelongsTo(() => User, "reviewerId")
+  reviewer: User | null;
+
+  @ForeignKey(() => User)
+  @Column(DataType.UUID)
+  @SkipChangeset
+  reviewerId: string | null;
+
+  @BelongsTo(() => User, "reviewRequestedById")
+  reviewRequestedBy: User | null;
+
+  @ForeignKey(() => User)
+  @Column(DataType.UUID)
+  @SkipChangeset
+  reviewRequestedById: string | null;
 
   @ForeignKey(() => Template)
   @Column(DataType.UUID)
@@ -1298,6 +1323,47 @@ class Document extends ArchivableModel<
 
     await this.archiveWithChildren(ctx, reason);
     return this;
+  };
+
+  /**
+   * Request a review of this document, replacing any existing reviewer.
+   *
+   * @param ctx The API context, the authenticated user is the requester.
+   * @param reviewer The user being asked to review the document.
+   * @returns The updated document.
+   */
+  requestReviewWithCtx = async (ctx: APIContext, reviewer: User) => {
+    const previousReviewerId = this.reviewerId ?? null;
+    this.reviewStatus = DocumentReviewStatus.InReview;
+    this.reviewerId = reviewer.id;
+    this.reviewRequestedById = ctx.state.auth.user.id;
+
+    return this.saveWithCtx(ctx, undefined, {
+      name: "review_requested",
+      data: { reviewerId: reviewer.id, previousReviewerId },
+    });
+  };
+
+  /**
+   * Record the reviewer's decision on a document that is in review.
+   *
+   * @param ctx The API context, the authenticated user is the reviewer.
+   * @param approved Whether the reviewer approved or requested changes.
+   * @returns The updated document.
+   */
+  completeReviewWithCtx = async (ctx: APIContext, approved: boolean) => {
+    if (this.reviewStatus !== DocumentReviewStatus.InReview) {
+      throw ValidationError("Document is not in review");
+    }
+
+    this.reviewStatus = approved
+      ? DocumentReviewStatus.Approved
+      : DocumentReviewStatus.ChangesRequested;
+
+    return this.saveWithCtx(ctx, undefined, {
+      name: approved ? "review_approved" : "review_changes_requested",
+      data: { reviewerId: this.reviewerId },
+    });
   };
 
   // Restore an archived document back to being visible to the team
