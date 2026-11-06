@@ -5,8 +5,15 @@
  *
  *   yarn test:mutation --mutate "shared/utils/color.ts"
  *
- * Server tests need Postgres and Redis running (see STUDENTS.md). To skip them,
- * set STRYKER_VITEST_PROJECTS (see vitest.stryker.config.ts).
+ * Server tests need Postgres and Redis running (see STUDENTS.md). Most server
+ * tests import most server code, so when mutating server files also set
+ * STRYKER_VITEST_INCLUDE to the relevant test files, e.g.:
+ *
+ *   STRYKER_VITEST_INCLUDE=server/utils/fs.test.ts \
+ *     yarn test:mutation --mutate "server/utils/fs.ts"
+ *
+ * STRYKER_VITEST_PROJECTS skips whole projects instead. Both are documented in
+ * vitest.stryker.config.ts.
  *
  * @type {import("@stryker-mutator/api/core").PartialStrykerOptions}
  */
@@ -45,6 +52,9 @@ const config = {
   ignoreStatic: true,
   concurrency: 4,
   timeoutMS: 60000,
+  // The initial run executes every test related to the mutated files in a
+  // single worker; for server files that can be a large part of the suite.
+  dryRunTimeoutMinutes: 60,
 };
 
 export default config;
