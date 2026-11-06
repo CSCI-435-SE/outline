@@ -90,7 +90,8 @@ export function rewriteAttachmentPaths(
         reference
       );
 
-    const segments = attachment.pathInZip.split(path.sep);
+    // Zip entry paths always use forward slashes, regardless of platform.
+    const segments = attachment.pathInZip.split(path.posix.sep);
     const attachmentsIdx = segments.findIndex(
       (seg) => seg.toLowerCase() === "attachments"
     );
@@ -139,7 +140,7 @@ export function rewriteInternalLinks(
   for (const match of internalLinks) {
     const referredDocPath = match[1];
     const normalizedDocPath = decodeURI(
-      path.normalize(`${basePath}/${referredDocPath}`)
+      path.posix.normalize(`${basePath}/${referredDocPath}`)
     );
 
     const referredDocId = docMap[normalizedDocPath];

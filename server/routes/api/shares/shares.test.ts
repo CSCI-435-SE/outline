@@ -1332,6 +1332,16 @@ describe("#shares.revoke", () => {
 });
 
 describe("#shares.subscribe", () => {
+  // Test requests all come from the loopback address, and the test database
+  // persists between runs, so clear earlier subscriptions to stay under the
+  // per-IP subscription limit.
+  beforeEach(async () => {
+    await ShareSubscription.destroy({
+      where: { ipAddress: ["::1", "127.0.0.1", "::ffff:127.0.0.1"] },
+      force: true,
+    });
+  });
+
   it("should create a subscription for a published share", async () => {
     const share = await buildShare();
     const res = await server.post("/api/shares.subscribe", {

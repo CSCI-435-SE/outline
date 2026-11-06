@@ -463,8 +463,9 @@ export class DocumentConverter {
    * @returns The markdown content with frontmatter converted to a YAML codeblock.
    */
   private static processFrontmatter(content: string): string {
-    // Frontmatter must start at the beginning of the document
-    const frontmatterRegex = /^---\n([\s\S]*?)\n---(?:\n|$)/;
+    // Frontmatter must start at the beginning of the document. Accept CRLF
+    // line endings too, as files authored on Windows commonly use them.
+    const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
     const match = content.match(frontmatterRegex);
 
     if (!match) {

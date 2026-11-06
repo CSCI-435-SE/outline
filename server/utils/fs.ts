@@ -175,8 +175,10 @@ export function __setRequireDirectoryCache(
  * @returns An array of tuples containing the required files and their names.
  */
 export function requireDirectory<T>(dirName: string): [T, string][] {
+  // Cache suffixes use forward slashes; normalize so they match on Windows.
+  const posixDirName = dirName.split(path.sep).join(path.posix.sep);
   for (const [suffix, modules] of requireDirectoryCache) {
-    if (dirName.endsWith(suffix)) {
+    if (posixDirName.endsWith(suffix)) {
       return Object.entries(modules)
         .filter(
           ([filePath]) =>
