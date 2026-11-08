@@ -70,7 +70,8 @@ describe("ZipHelper.extract", () => {
 
     // The escaped filename must NOT appear in CWD.
     expect(await fs.pathExists(path.join(scratchCwd, filename))).toBe(false);
-  });
+    // Creating ~2000 nested directories takes several seconds on Windows.
+  }, 30000);
 });
 
 describe("ZipHelper.toFileTree", () => {

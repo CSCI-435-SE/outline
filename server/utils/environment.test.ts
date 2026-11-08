@@ -12,6 +12,7 @@ describe("withFileSecrets", () => {
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true });
+    vi.restoreAllMocks();
   });
 
   it("should read env value from file when _FILE suffix is used", () => {
@@ -158,8 +159,18 @@ describe("withFileSecrets", () => {
     process.env.AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE = tokenFile;
     process.env.SMTP_PASSWORD_FILE = secretFile;
 
+    // A local .env (e.g. copied from .env.sample) may set SMTP_PASSWORD to an
+    // empty string, which takes precedence over the _FILE variant. Unset it and
+    // stop the env files in the working directory from being reloaded.
+    const smtpPassword = process.env.SMTP_PASSWORD;
+    delete process.env.SMTP_PASSWORD;
+    vi.spyOn(process, "cwd").mockReturnValue(tmpDir);
+
     vi.resetModules();
     const env = (await import("../env")).default;
+    if (smtpPassword !== undefined) {
+      process.env.SMTP_PASSWORD = smtpPassword;
+    }
 
     // Outline's own variable is resolved from the file.
     expect(env.SMTP_PASSWORD).toBe("smtp-secret-value");
