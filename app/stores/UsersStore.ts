@@ -190,6 +190,21 @@ export default class UsersStore extends Store<User> {
     return queriedUsers(users, query);
   };
 
+  /**
+   * Returns users who can be asked to review a document, optionally filtered
+   * by a query. Suspended and invited users are left out, as is the user
+   * requesting the review since they cannot review their own request.
+   *
+   * @param requesterId The id of the user requesting the review.
+   * @param query An optional search query.
+   * @returns A list of users that can review the document.
+   */
+  reviewCandidates = (requesterId: string, query = "") =>
+    queriedUsers(
+      filter(this.active, (user) => user.id !== requesterId),
+      query
+    );
+
   actionOnUser = async (action: string, user: User, role?: UserRole) => {
     const res = await client.post(`/users.${action}`, {
       id: user.id,

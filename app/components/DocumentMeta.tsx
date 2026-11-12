@@ -155,7 +155,7 @@ const DocumentMeta: React.FC<Props> = ({
     document.reviewedAt ? (
       <span>
         <Separator />
-        {t("Reviewed")}{" "}
+        {t("Marked not stale")}{" "}
         <Time dateTime={document.reviewedAt} addSuffix shorten />
       </span>
     ) : null;

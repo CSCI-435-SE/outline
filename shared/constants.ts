@@ -7,6 +7,7 @@ import {
   CommentingAccess,
   NotificationBadgeType,
 } from "./types";
+import { STALE_DOCUMENT_THRESHOLD_DAYS } from "./utils/isStale";
 
 export const MAX_AVATAR_DISPLAY = 6;
 
@@ -39,6 +40,7 @@ export const TeamPreferenceDefaults: TeamPreferences = {
   [TeamPreference.MCP]: true,
   [TeamPreference.DisabledEmbeds]: [],
   [TeamPreference.ReviewWorkflow]: false,
+  [TeamPreference.StalenessThreshold]: STALE_DOCUMENT_THRESHOLD_DAYS,
 };
 
 export const UserPreferenceDefaults: UserPreferences = {

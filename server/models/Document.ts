@@ -513,6 +513,23 @@ class Document extends ArchivableModel<
     );
   }
 
+  /**
+   * The review status a document should have after its content or title is
+   * edited. Editing an approved document invalidates the approval, so it moves
+   * back to draft and must be sent for review again. Other statuses are
+   * unaffected.
+   *
+   * @param status The review status before the edit.
+   * @returns The review status after the edit.
+   */
+  static reviewStatusAfterEdit(
+    status: DocumentReviewStatus | null
+  ): DocumentReviewStatus | null {
+    return status === DocumentReviewStatus.Approved
+      ? DocumentReviewStatus.Draft
+      : status;
+  }
+
   // hooks
 
   // Note: this hook must be declared before updateCollectionStructure and
@@ -529,6 +546,8 @@ class Document extends ArchivableModel<
       model.changed("title")
     ) {
       model.lastEditedAt = new Date();
+      // collaborative edits skip hooks, see documentCollaborativeUpdater.
+      model.reviewStatus = Document.reviewStatusAfterEdit(model.reviewStatus);
     }
   }
 

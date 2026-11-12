@@ -8,7 +8,12 @@ import styled, { useTheme } from "styled-components";
 import Icon from "@shared/components/Icon";
 import { s } from "@shared/styles";
 import { altDisplay, metaDisplay } from "@shared/utils/keyboard";
-import { publishDocument } from "~/actions/definitions/documents";
+import {
+  approveDocument,
+  publishDocument,
+  requestDocumentChanges,
+  requestDocumentReviewAgain,
+} from "~/actions/definitions/documents";
 import { restoreRevision } from "~/actions/definitions/revisions";
 import { Action, Separator } from "~/components/Actions";
 import Badge from "~/components/Badge";
@@ -39,6 +44,7 @@ import type Template from "~/models/Template";
 import { documentEditPath } from "~/utils/routeHelpers";
 import { ChangesNavigation } from "./ChangesNavigation";
 import ObservingBanner from "./ObservingBanner";
+import ReviewStatusBadge from "./ReviewStatusBadge";
 import { SearchHighlightChip } from "./SearchHighlightChip";
 import ShareButton from "./ShareButton";
 
@@ -207,6 +213,13 @@ function DocumentHeader({
         <>
           <ObservingBanner />
           <SearchHighlightChip />
+          {/* The title area above is only shown once the page is scrolled, so
+          the review status lives with the actions to stay visible. */}
+          {!isRevision && document.visibleReviewStatus && (
+            <Action>
+              <ReviewStatusBadge document={document} />
+            </Action>
+          )}
           {!isDeleted && !isRevision && can.listViews && (
             <Collaborators
               document={document}
@@ -278,6 +291,38 @@ function DocumentHeader({
               </Action>
             </>
           )}
+          {can.review && !isRevision && (
+            <>
+              <Action>
+                <Button
+                  action={requestDocumentChanges}
+                  hideOnActionDisabled
+                  hideIcon
+                  neutral
+                >
+                  {t("Request changes")}
+                </Button>
+              </Action>
+              <Action>
+                <Button action={approveDocument} hideOnActionDisabled hideIcon>
+                  {t("Approve")}
+                </Button>
+              </Action>
+            </>
+          )}
+          {can.requestReview &&
+            document.canRequestReviewAgain &&
+            !isRevision && (
+              <Action>
+                <Button
+                  action={requestDocumentReviewAgain}
+                  hideOnActionDisabled
+                  hideIcon
+                >
+                  {t("Request review again")}
+                </Button>
+              </Action>
+            )}
           {can.publish && (
             <Action>
               <Button
