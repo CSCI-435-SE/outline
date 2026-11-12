@@ -89,6 +89,26 @@ describe("DocumentHelper", () => {
   });
 
   describe("toHTML", () => {
+    it("should render a slideshow as its images in order", async () => {
+      const document = await buildDocument({
+        text: [
+          ":::slideshow 5000",
+          "![](https://example.com/b.png)",
+          "![](https://example.com/a.png)",
+          ":::",
+        ].join("\n"),
+      });
+      const result = await DocumentHelper.toHTML(document, {
+        includeTitle: false,
+        includeStyles: false,
+      });
+
+      expect(result).toMatch(
+        /<div class="slideshow" data-interval="5000"><img src="https:\/\/example\.com\/b\.png" alt=""><img src="https:\/\/example\.com\/a\.png" alt=""><\/div>/
+      );
+      expect(result).not.toContain("<script");
+    });
+
     it("should return html", async () => {
       const document = await buildDocument({
         text: "This is a test paragraph",
