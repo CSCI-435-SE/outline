@@ -13,7 +13,9 @@ import {
   getSlideshowUploadSession,
   slideshowUploadKey,
 } from "../plugins/SlideshowUploadPlugin";
-import insertSlideshowFiles from "./insertSlideshowFiles";
+import insertSlideshowFiles, {
+  appendSlideshowFiles,
+} from "./insertSlideshowFiles";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 vi.mock("@sentry/react", () => ({ captureException: vi.fn() }));
@@ -34,9 +36,13 @@ interface Deferred {
  * Creates a minimal editor view backed by a real editor state, and an upload
  * function whose uploads are resolved manually by the test.
  */
-function setup() {
+function setup(existing?: string[]) {
   let state: EditorState = createEditorState(
-    schema.nodes.doc.create(null, [p("Before"), p(""), p("After")]),
+    schema.nodes.doc.create(null, [
+      p("Before"),
+      existing ? schema.nodes.slideshow.create({ images: existing }) : p(""),
+      p("After"),
+    ]),
     [new SlideshowUploadPlugin()]
   );
   state = state.apply(
@@ -261,3 +267,62 @@ function findSlideshow(state: EditorState) {
   });
   return range;
 }
+
+describe("appendSlideshowFiles", () => {
+  const existing = ["https://example.com/a.png", "https://example.com/b.png"];
+  // The slideshow follows the "Before" paragraph.
+  const pos = 8;
+
+  it("adds uploads to the end of an existing slideshow in order", async () => {
+    const { view, uploads, options, slideshow, session } = setup(existing);
+
+    appendSlideshowFiles(view, pos, [image("c.png"), image("d.png")], options);
+    expect(session()?.items).toHaveLength(2);
+
+    uploads[1].resolve("/d");
+    await flush();
+    expect(slideshow()?.attrs?.images).toEqual([...existing, "/d"]);
+
+    uploads[0].resolve("/c");
+    await flush();
+    expect(slideshow()?.attrs?.images).toEqual([...existing, "/c", "/d"]);
+    expect(session()).toBeUndefined();
+  });
+
+  it("keeps edits made to the slideshow while uploading", async () => {
+    const { view, uploads, options, slideshow } = setup(existing);
+
+    appendSlideshowFiles(view, pos, [image("c.png"), image("d.png")], options);
+    uploads[0].resolve("/c");
+    await flush();
+
+    // Someone removes the first image while the second is uploading.
+    view.dispatch(
+      view.state.tr.setNodeAttribute(pos, "images", [existing[1], "/c"])
+    );
+    uploads[1].resolve("/d");
+    await flush();
+
+    expect(slideshow()?.attrs?.images).toEqual([existing[1], "/c", "/d"]);
+  });
+
+  it("does nothing when the position isn't a slideshow", () => {
+    const { view, options } = setup(existing);
+
+    expect(
+      appendSlideshowFiles(view, 0, [image("c.png")], options)
+    ).toBeUndefined();
+    expect(options.uploadFile).not.toHaveBeenCalled();
+  });
+
+  it("persists appended images through markdown", async () => {
+    const { view, uploads, options } = setup(existing);
+
+    appendSlideshowFiles(view, pos, [image("c.png")], options);
+    uploads[0].resolve("/api/attachments.redirect?id=c");
+    await flush();
+    const markdown = serializer.serialize(view.state.doc);
+
+    expect(parser.parse(markdown)?.toJSON()).toEqual(view.state.doc.toJSON());
+  });
+});

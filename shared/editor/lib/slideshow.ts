@@ -128,3 +128,151 @@ export function getUploadedSlideshowImages(
     .map((item) => (item.status === "done" ? item.src : undefined))
     .filter((src): src is string => !!src);
 }
+
+/**
+ * Returns a new image list with the given images added to the end. Values
+ * that are not usable image URLs are ignored.
+ *
+ * @param images the current image URLs.
+ * @param additions the image URLs to add.
+ * @returns the updated image URLs.
+ */
+export function addSlideshowImages(
+  images: readonly string[],
+  additions: readonly string[]
+): string[] {
+  return [...images, ...additions.filter(isSlideshowImageUrl)];
+}
+
+/**
+ * Returns a new image list without the image at the given index. Removing the
+ * last image leaves an empty list rather than removing the slideshow.
+ *
+ * @param images the current image URLs.
+ * @param index the index of the image to remove.
+ * @returns the updated image URLs, or undefined if the index is out of range.
+ */
+export function removeSlideshowImage(
+  images: readonly string[],
+  index: number
+): string[] | undefined {
+  if (!isValidIndex(images, index)) {
+    return undefined;
+  }
+  return images.filter((_, i) => i !== index);
+}
+
+/**
+ * Returns a new image list with the image at one index moved to another,
+ * shifting the images in between.
+ *
+ * @param images the current image URLs.
+ * @param from the index of the image to move.
+ * @param to the index the image should end up at.
+ * @returns the updated image URLs, or undefined if either index is out of
+ * range or the image would not move.
+ */
+export function moveSlideshowImage(
+  images: readonly string[],
+  from: number,
+  to: number
+): string[] | undefined {
+  if (!isValidIndex(images, from) || !isValidIndex(images, to) || from === to) {
+    return undefined;
+  }
+  const next = [...images];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
+
+/**
+ * Wraps an index into the range of a slideshow, so stepping past the last
+ * image returns to the first and stepping before the first goes to the last.
+ *
+ * @param index the index to wrap, which may be negative or past the end.
+ * @param count the number of images in the slideshow.
+ * @returns a valid index, or 0 for an empty slideshow.
+ */
+export function wrapSlideshowIndex(index: number, count: number): number {
+  if (count <= 0 || !Number.isInteger(index)) {
+    return 0;
+  }
+  return ((index % count) + count) % count;
+}
+
+/**
+ * Works out which image to show after the image list changes, so playback
+ * continues from a valid image. The image that was showing stays on screen
+ * if it is still in the list, even if it moved. If it was removed, the image
+ * that took its place is shown, or the last image if it was at the end.
+ *
+ * @param previous the image URLs before the change.
+ * @param next the image URLs after the change.
+ * @param activeIndex the index that was showing before the change.
+ * @returns the index to show in the new list, or 0 for an empty slideshow.
+ */
+export function getSlideshowIndexAfterChange(
+  previous: readonly string[],
+  next: readonly string[],
+  activeIndex: number
+): number {
+  if (!next.length) {
+    return 0;
+  }
+
+  const src = previous[activeIndex];
+  if (src !== undefined) {
+    // The same image may appear more than once, prefer the copy that has
+    // stayed in place, then the nearest one.
+    if (next[activeIndex] === src) {
+      return activeIndex;
+    }
+    let nearest: number | undefined;
+    next.forEach((candidate, index) => {
+      if (
+        candidate === src &&
+        (nearest === undefined ||
+          Math.abs(index - activeIndex) < Math.abs(nearest - activeIndex))
+      ) {
+        nearest = index;
+      }
+    });
+    if (nearest !== undefined) {
+      return nearest;
+    }
+  }
+
+  return Math.min(Math.max(activeIndex, 0), next.length - 1);
+}
+
+/**
+ * Updates a slideshow's image list with the latest finished uploads. The
+ * uploads written last time are taken out and the current uploads are added
+ * to the end, so the images already in the slideshow, and any edits made
+ * while uploading, are kept.
+ *
+ * @param current the image URLs currently on the slideshow.
+ * @param previous the uploaded image URLs that were written last time.
+ * @param uploaded the uploaded image URLs to write now, in selection order.
+ * @returns the updated image URLs.
+ */
+export function mergeSlideshowUploads(
+  current: readonly string[],
+  previous: readonly string[],
+  uploaded: readonly string[]
+): string[] {
+  const base = [...current];
+  // Search from the end, as the uploads were added after the existing images.
+  for (const src of [...previous].reverse()) {
+    const index = base.lastIndexOf(src);
+    if (index !== -1) {
+      base.splice(index, 1);
+    }
+  }
+  return [...base, ...uploaded];
+}
+
+function isValidIndex(images: readonly string[], index: number): boolean {
+  return Number.isInteger(index) && index >= 0 && index < images.length;
+}

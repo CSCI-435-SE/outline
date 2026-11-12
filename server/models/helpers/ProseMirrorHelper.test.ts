@@ -7,7 +7,12 @@ import type { ProsemirrorData } from "@shared/types";
 import { MentionType } from "@shared/types";
 import { createContext } from "@server/context";
 import { schema } from "@server/editor";
-import { buildProseMirrorDoc, buildUser } from "@server/test/factories";
+import {
+  buildAttachment,
+  buildProseMirrorDoc,
+  buildTeam,
+  buildUser,
+} from "@server/test/factories";
 import type { MentionAttrs } from "./ProsemirrorHelper";
 import { ProsemirrorHelper } from "./ProsemirrorHelper";
 
@@ -1796,6 +1801,61 @@ describe("ProsemirrorHelper", () => {
         expect(plain.slice(start, end)).toBe("aba");
         expect(start).toBe(2);
       });
+    });
+  });
+
+  describe("slideshow attachments", () => {
+    function slideshowDoc(images: string[]) {
+      return Node.fromJSON(schema, {
+        type: "doc",
+        content: [{ type: "slideshow", attrs: { images, interval: 3000 } }],
+      });
+    }
+
+    it("parses attachment ids from slideshow images", () => {
+      const first = faker.string.uuid();
+      const second = faker.string.uuid();
+      const doc = slideshowDoc([
+        `/api/attachments.redirect?id=${first}`,
+        "https://example.com/external.png",
+        `/api/attachments.redirect?id=${second}`,
+      ]);
+
+      expect(ProsemirrorHelper.parseAttachmentIds(doc)).toEqual([
+        first,
+        second,
+      ]);
+    });
+
+    it("signs uploaded slideshow images and keeps their order", async () => {
+      const attachment = await buildAttachment();
+      const external = "https://example.com/external.png";
+      const doc = slideshowDoc([external, attachment.redirectUrl]);
+
+      const json = await ProsemirrorHelper.signAttachmentUrls(
+        doc,
+        attachment.teamId
+      );
+
+      const images = json.content?.[0].attrs?.images;
+      expect(images).toHaveLength(2);
+      expect(Array.isArray(images) && images[0]).toBe(external);
+      expect(Array.isArray(images) && images[1]).not.toBe(
+        attachment.redirectUrl
+      );
+      expect(Array.isArray(images) && images[1]).toEqual(
+        expect.stringMatching(/sig=|s3mock/)
+      );
+    });
+
+    it("does not sign attachments from another team", async () => {
+      const attachment = await buildAttachment();
+      const team = await buildTeam();
+      const doc = slideshowDoc([attachment.redirectUrl]);
+
+      const json = await ProsemirrorHelper.signAttachmentUrls(doc, team.id);
+
+      expect(json.content?.[0].attrs?.images).toEqual([attachment.redirectUrl]);
     });
   });
 });
