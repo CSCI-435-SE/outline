@@ -1,5 +1,5 @@
 import Document from "~/models/Document";
-import { DocumentReviewStatus } from "@shared/types";
+import { DocumentReviewStatus, TeamPreference } from "@shared/types";
 import { STALE_DOCUMENT_THRESHOLD_DAYS } from "@shared/utils/isStale";
 import stores from "~/stores";
 
@@ -84,6 +84,36 @@ describe("Document model", () => {
         documents
       );
       expect(document.isStale).toBe(true);
+    });
+
+    describe("when the team has not saved a staleness threshold", () => {
+      beforeAll(() => {
+        stores.auth.add({ id: "team-no-threshold", preferences: {} });
+        stores.auth.currentTeamId = "team-no-threshold";
+      });
+
+      afterAll(() => {
+        stores.auth.currentTeamId = undefined;
+      });
+
+      test("should use the default threshold", () => {
+        expect(
+          stores.auth.team?.getPreference(TeamPreference.StalenessThreshold)
+        ).toBe(STALE_DOCUMENT_THRESHOLD_DAYS);
+      });
+
+      test("should not be stale when recently edited", () => {
+        const document = new Document(
+          {
+            id: "stale-no-threshold",
+            title: "Test",
+            publishedAt: daysAgo(STALE_DOCUMENT_THRESHOLD_DAYS + 100),
+            lastEditedAt: daysAgo(1),
+          },
+          documents
+        );
+        expect(document.isStale).toBe(false);
+      });
     });
 
     test("should not be stale when recently edited", () => {
