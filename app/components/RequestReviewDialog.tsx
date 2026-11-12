@@ -36,8 +36,11 @@ function RequestReviewDialog({ document, onShare, onRequested }: Props) {
   const { users } = useStores();
   const user = useCurrentUser();
   const [query, setQuery] = React.useState("");
+  // Start from the current reviewer, unless that is the person asking.
   const [selectedId, setSelectedId] = React.useState<string | undefined>(
-    document.reviewerId ?? undefined
+    document.reviewerId && document.reviewerId !== user.id
+      ? document.reviewerId
+      : undefined
   );
   const [error, setError] = React.useState<string | undefined>();
   const hasReviewer = !!document.reviewerId;
@@ -88,7 +91,14 @@ function RequestReviewDialog({ document, onShare, onRequested }: Props) {
   return (
     <ConfirmationDialog
       onSubmit={handleSubmit}
-      submitText={hasReviewer ? t("Change reviewer") : t("Request review")}
+      submitText={
+        // Sending it back to the same reviewer is a new request, not a change.
+        document.canRequestReviewAgain && selectedId === document.reviewerId
+          ? t("Request review again")
+          : hasReviewer
+            ? t("Change reviewer")
+            : t("Request review")
+      }
       savingText={`${t("Requesting")}…`}
       disabled={!selectedId}
     >

@@ -1326,10 +1326,17 @@ export const markDocumentAsReviewed = createAction({
 });
 
 export const requestDocumentReview = createAction({
-  name: ({ t, activeDocumentId, stores }) =>
-    activeDocumentId && stores.documents.get(activeDocumentId)?.reviewerId
-      ? `${t("Change reviewer")}…`
-      : `${t("Request review")}…`,
+  name: ({ t, activeDocumentId, currentUserId, stores }) => {
+    const document = activeDocumentId
+      ? stores.documents.get(activeDocumentId)
+      : undefined;
+    return document?.canRequestReviewAgain &&
+      document.reviewerId !== currentUserId
+      ? `${t("Request review again")}…`
+      : document?.reviewerId
+        ? `${t("Change reviewer")}…`
+        : `${t("Request review")}…`;
+  },
   analyticsName: "Request document review",
   section: ActiveDocumentSection,
   icon: <EyeIcon />,
@@ -1367,6 +1374,36 @@ export const requestDocumentReview = createAction({
         />
       ),
     });
+  },
+});
+
+export const requestDocumentReviewAgain = createAction({
+  name: ({ t }) => t("Request review again"),
+  analyticsName: "Request document review again",
+  section: ActiveDocumentSection,
+  icon: <EyeIcon />,
+  visible: ({ activeDocumentId, currentUserId, stores }) => {
+    const document = activeDocumentId
+      ? stores.documents.get(activeDocumentId)
+      : undefined;
+    // The reviewer cannot send a document back to themselves.
+    return (
+      !!activeDocumentId &&
+      !!stores.policies.abilities(activeDocumentId).requestReview &&
+      !!document?.canRequestReviewAgain &&
+      document.reviewerId !== currentUserId
+    );
+  },
+  perform: async ({ activeDocumentId, stores, t }) => {
+    const document = activeDocumentId
+      ? stores.documents.get(activeDocumentId)
+      : undefined;
+    if (!document?.reviewerId) {
+      return;
+    }
+
+    await document.requestReview(document.reviewerId);
+    toast.success(t("Review requested"));
   },
 });
 

@@ -1894,5 +1894,6 @@
   "Previously approved by {{ userName }}": "Previously approved by {{ userName }}",
   "Review requested by {{ userName }}": "Review requested by {{ userName }}",
   "Changes requested by {{ userName }}": "Changes requested by {{ userName }}",
-  "Approved by {{ userName }}": "Approved by {{ userName }}"
+  "Approved by {{ userName }}": "Approved by {{ userName }}",
+  "Request review again": "Request review again"
 }

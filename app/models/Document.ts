@@ -2,9 +2,8 @@ import { addDays, differenceInDays } from "date-fns";
 import i18n, { t } from "i18next";
 import { capitalize, floor } from "es-toolkit/compat";
 import { action, autorun, comparer, computed, observable, set } from "mobx";
-import { TeamPreference } from "@shared/types";
+import { DocumentReviewStatus, TeamPreference } from "@shared/types";
 import type {
-  DocumentReviewStatus,
   JSONObject,
   NavigationNode,
   ProsemirrorData,
@@ -389,6 +388,19 @@ export default class Document extends ArchivableModel implements Searchable {
   @computed
   get visibleReviewStatus(): DocumentReviewStatus | null {
     return this.isReviewWorkflowEnabled ? (this.reviewStatus ?? null) : null;
+  }
+
+  /**
+   * Whether the document is waiting on its author to send it back to the same
+   * reviewer, after changes were requested or an approval was lost to an edit.
+   */
+  @computed
+  get canRequestReviewAgain(): boolean {
+    return (
+      !!this.reviewerId &&
+      (this.visibleReviewStatus === DocumentReviewStatus.ChangesRequested ||
+        this.visibleReviewStatus === DocumentReviewStatus.Draft)
+    );
   }
 
   /**

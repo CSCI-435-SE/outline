@@ -12,6 +12,7 @@ import {
   approveDocument,
   publishDocument,
   requestDocumentChanges,
+  requestDocumentReviewAgain,
 } from "~/actions/definitions/documents";
 import { restoreRevision } from "~/actions/definitions/revisions";
 import { Action, Separator } from "~/components/Actions";
@@ -309,6 +310,19 @@ function DocumentHeader({
               </Action>
             </>
           )}
+          {can.requestReview &&
+            document.canRequestReviewAgain &&
+            !isRevision && (
+              <Action>
+                <Button
+                  action={requestDocumentReviewAgain}
+                  hideOnActionDisabled
+                  hideIcon
+                >
+                  {t("Request review again")}
+                </Button>
+              </Action>
+            )}
           {can.publish && (
             <Action>
               <Button

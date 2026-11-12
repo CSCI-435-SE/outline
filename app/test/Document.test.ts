@@ -279,6 +279,54 @@ describe("Document model", () => {
       expect(build(status).visibleReviewStatus).toBe(status);
     });
 
+    test.each([
+      DocumentReviewStatus.ChangesRequested,
+      DocumentReviewStatus.Draft,
+    ])(
+      "should offer to request review again from the reviewer of a %s document",
+      (status) => {
+        const document = new Document(
+          {
+            id: `doc-again-${status}`,
+            title: "Test",
+            reviewStatus: status,
+            reviewerId: "user-reviewer",
+          },
+          documents
+        );
+        expect(document.canRequestReviewAgain).toBe(true);
+      }
+    );
+
+    test("should not offer to request review again without a reviewer", () => {
+      const document = new Document(
+        {
+          id: "doc-again-no-reviewer",
+          title: "Test",
+          reviewStatus: DocumentReviewStatus.ChangesRequested,
+          reviewerId: null,
+        },
+        documents
+      );
+      expect(document.canRequestReviewAgain).toBe(false);
+    });
+
+    test.each([DocumentReviewStatus.InReview, DocumentReviewStatus.Approved])(
+      "should not offer to request review again for a %s document",
+      (status) => {
+        const document = new Document(
+          {
+            id: `doc-again-${status}`,
+            title: "Test",
+            reviewStatus: status,
+            reviewerId: "user-reviewer",
+          },
+          documents
+        );
+        expect(document.canRequestReviewAgain).toBe(false);
+      }
+    );
+
     test("should hide the status when the workflow is off", () => {
       setReviewWorkflow(false);
       expect(build(DocumentReviewStatus.Approved).visibleReviewStatus).toBe(
