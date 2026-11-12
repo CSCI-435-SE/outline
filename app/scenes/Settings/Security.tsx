@@ -183,6 +183,17 @@ function Security() {
     [saveData, team.preferences]
   );
 
+  const handleReviewWorkflowChange = React.useCallback(
+    async (checked: boolean) => {
+      const preferences = {
+        ...team.preferences,
+        [TeamPreference.ReviewWorkflow]: checked,
+      };
+      await saveData({ preferences });
+    },
+    [saveData, team.preferences]
+  );
+
   const handleEmailDisplayChange = React.useCallback(
     async (emailDisplay: string) => {
       const preferences = {
@@ -384,6 +395,19 @@ function Security() {
           label={t("Commenting")}
           labelHidden
           short
+        />
+      </SettingRow>
+      <SettingRow
+        label={t("Review workflow")}
+        name={TeamPreference.ReviewWorkflow}
+        description={t(
+          "When enabled, members can request reviews and reviewers can approve documents"
+        )}
+      >
+        <Switch
+          id={TeamPreference.ReviewWorkflow}
+          checked={!!team.getPreference(TeamPreference.ReviewWorkflow)}
+          onChange={handleReviewWorkflowChange}
         />
       </SettingRow>
       <SettingRow

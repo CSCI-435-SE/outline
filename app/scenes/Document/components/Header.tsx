@@ -8,7 +8,11 @@ import styled, { useTheme } from "styled-components";
 import Icon from "@shared/components/Icon";
 import { s } from "@shared/styles";
 import { altDisplay, metaDisplay } from "@shared/utils/keyboard";
-import { publishDocument } from "~/actions/definitions/documents";
+import {
+  approveDocument,
+  publishDocument,
+  requestDocumentChanges,
+} from "~/actions/definitions/documents";
 import { restoreRevision } from "~/actions/definitions/revisions";
 import { Action, Separator } from "~/components/Actions";
 import Badge from "~/components/Badge";
@@ -39,6 +43,7 @@ import type Template from "~/models/Template";
 import { documentEditPath } from "~/utils/routeHelpers";
 import { ChangesNavigation } from "./ChangesNavigation";
 import ObservingBanner from "./ObservingBanner";
+import ReviewStatusBadge from "./ReviewStatusBadge";
 import { SearchHighlightChip } from "./SearchHighlightChip";
 import ShareButton from "./ShareButton";
 
@@ -201,6 +206,7 @@ function DocumentHeader({
           {document.title}
           {document.isArchived && <Badge>{t("Archived")}</Badge>}
           {document.isDraft && <Badge>{t("Draft")}</Badge>}
+          {!isRevision && <ReviewStatusBadge document={document} />}
         </Flex>
       }
       actions={({ isCompact }) => (
@@ -275,6 +281,25 @@ function DocumentHeader({
                     {t("Restore")}
                   </Button>
                 </Tooltip>
+              </Action>
+            </>
+          )}
+          {can.review && !isRevision && (
+            <>
+              <Action>
+                <Button
+                  action={requestDocumentChanges}
+                  hideOnActionDisabled
+                  hideIcon
+                  neutral
+                >
+                  {t("Request changes")}
+                </Button>
+              </Action>
+              <Action>
+                <Button action={approveDocument} hideOnActionDisabled hideIcon>
+                  {t("Approve")}
+                </Button>
               </Action>
             </>
           )}

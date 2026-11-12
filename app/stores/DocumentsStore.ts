@@ -654,6 +654,49 @@ export default class DocumentsStore extends Store<Document> {
     collection?.updateDocument(document);
   };
 
+  /**
+   * Asks a teammate to review the document, replacing any existing reviewer.
+   *
+   * @param document The document to review.
+   * @param reviewerId The id of the user being asked to review it.
+   */
+  @action
+  requestReview = (document: Document, reviewerId: string) =>
+    this.performReviewAction("/documents.request_review", document, {
+      reviewerId,
+    });
+
+  /**
+   * Approves the document, the current user must be its reviewer.
+   *
+   * @param document The document to approve.
+   */
+  @action
+  approve = (document: Document) =>
+    this.performReviewAction("/documents.approve", document);
+
+  /**
+   * Requests changes to the document, the current user must be its reviewer.
+   *
+   * @param document The document to request changes on.
+   */
+  @action
+  requestChanges = (document: Document) =>
+    this.performReviewAction("/documents.request_changes", document);
+
+  private performReviewAction = async (
+    path: string,
+    document: Document,
+    params: Record<string, string> = {}
+  ) => {
+    const res = await client.post(path, { id: document.id, ...params });
+    runInAction("Document#performReviewAction", () => {
+      invariant(res?.data, "Data should be available");
+      document.updateData(res.data);
+      this.addPolicies(res.policies);
+    });
+  };
+
   @action
   restore = async (
     document: Document,

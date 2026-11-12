@@ -35,6 +35,8 @@ import {
   EditIcon,
   EmbedIcon,
   OpenIcon,
+  EyeIcon,
+  CheckmarkIcon,
 } from "outline-icons";
 import { toast } from "sonner";
 import { errToString } from "@shared/utils/error";
@@ -58,6 +60,7 @@ import MarkdownIcon from "~/components/Icons/MarkdownIcon";
 import { getHeaderExpandedKey } from "~/components/Sidebar/components/Header";
 import { TemplateGallery } from "~/components/TemplateGallery";
 import DocumentTemplatizeDialog from "~/components/TemplatizeDialog";
+import RequestReviewDialog from "~/components/RequestReviewDialog";
 import {
   createAction,
   createActionGroup,
@@ -1320,6 +1323,98 @@ export const markDocumentAsReviewed = createAction({
       })
     );
   },
+});
+
+export const requestDocumentReview = createAction({
+  name: ({ t, activeDocumentId, stores }) =>
+    activeDocumentId && stores.documents.get(activeDocumentId)?.reviewerId
+      ? `${t("Change reviewer")}…`
+      : `${t("Request review")}…`,
+  analyticsName: "Request document review",
+  section: ActiveDocumentSection,
+  icon: <EyeIcon />,
+  visible: ({ activeDocumentId, stores }) =>
+    !!activeDocumentId &&
+    !!stores.policies.abilities(activeDocumentId).requestReview,
+  perform: ({ activeDocumentId, stores, t }) => {
+    const document = activeDocumentId
+      ? stores.documents.get(activeDocumentId)
+      : undefined;
+    if (!document) {
+      return;
+    }
+
+    const openShare = () =>
+      stores.dialogs.openModal({
+        title: t("Share this document"),
+        content: (
+          <SharePopover
+            document={document}
+            onRequestClose={stores.dialogs.closeAllModals}
+            visible
+          />
+        ),
+        replace: true,
+      });
+
+    stores.dialogs.openModal({
+      title: t("Request review"),
+      content: (
+        <RequestReviewDialog
+          document={document}
+          onShare={openShare}
+          onRequested={() => toast.success(t("Review requested"))}
+        />
+      ),
+    });
+  },
+});
+
+/**
+ * Records the current user's decision as the document's reviewer. Errors are
+ * shown as a toast by the action runner.
+ *
+ * @param context The action context.
+ * @param approved Whether to approve or request changes.
+ */
+async function completeDocumentReview(
+  { activeDocumentId, stores, t }: ActionContext,
+  approved: boolean
+) {
+  const document = activeDocumentId
+    ? stores.documents.get(activeDocumentId)
+    : undefined;
+  if (!document) {
+    return;
+  }
+
+  if (approved) {
+    await document.approve();
+    toast.success(t("Document approved"));
+  } else {
+    await document.requestChanges();
+    toast.success(t("Changes requested"));
+  }
+}
+
+export const approveDocument = createAction({
+  name: ({ t }) => t("Approve"),
+  analyticsName: "Approve document",
+  section: ActiveDocumentSection,
+  icon: <CheckmarkIcon />,
+  visible: ({ activeDocumentId, stores }) =>
+    !!activeDocumentId && !!stores.policies.abilities(activeDocumentId).review,
+  perform: (context) => completeDocumentReview(context, true),
+});
+
+export const requestDocumentChanges = createAction({
+  name: ({ t }) => t("Request changes"),
+  analyticsName: "Request document changes",
+  section: ActiveDocumentSection,
+  icon: <CommentIcon />,
+  visible: ({ activeDocumentId, stores }) =>
+    !!activeDocumentId && !!stores.policies.abilities(activeDocumentId).review,
+  perform: (context) => completeDocumentReview(context, false),
 });
 
 export const restoreDocument = createAction({

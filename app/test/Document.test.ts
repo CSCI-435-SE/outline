@@ -1,4 +1,5 @@
 import Document from "~/models/Document";
+import { DocumentReviewStatus } from "@shared/types";
 import { STALE_DOCUMENT_THRESHOLD_DAYS } from "@shared/utils/isStale";
 import stores from "~/stores";
 
@@ -216,6 +217,47 @@ describe("Document model", () => {
         documents
       );
       expect(document.isReviewedSinceEdit).toBe(false);
+    });
+  });
+  describe("visibleReviewStatus", () => {
+    const build = (reviewStatus?: DocumentReviewStatus | null) =>
+      new Document(
+        { id: `doc-${reviewStatus}`, title: "Test", reviewStatus },
+        documents
+      );
+
+    const setReviewWorkflow = (enabled: boolean) => {
+      stores.auth.add({
+        id: "team-review",
+        preferences: { reviewWorkflow: enabled },
+      });
+      stores.auth.currentTeamId = "team-review";
+    };
+
+    beforeEach(() => setReviewWorkflow(true));
+
+    afterAll(() => {
+      stores.auth.currentTeamId = undefined;
+    });
+
+    test.each([
+      DocumentReviewStatus.Draft,
+      DocumentReviewStatus.InReview,
+      DocumentReviewStatus.ChangesRequested,
+      DocumentReviewStatus.Approved,
+    ])("should show the %s status when the workflow is on", (status) => {
+      expect(build(status).visibleReviewStatus).toBe(status);
+    });
+
+    test("should hide the status when the workflow is off", () => {
+      setReviewWorkflow(false);
+      expect(build(DocumentReviewStatus.Approved).visibleReviewStatus).toBe(
+        null
+      );
+    });
+
+    test.each([null, undefined])("should be null for a %s status", (status) => {
+      expect(build(status).visibleReviewStatus).toBe(null);
     });
   });
 });
