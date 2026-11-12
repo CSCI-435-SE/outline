@@ -1295,7 +1295,7 @@ export const archiveDocument = createAction({
 });
 
 export const markDocumentAsReviewed = createAction({
-  name: ({ t }) => t("Mark as reviewed"),
+  name: ({ t }) => t("Mark as not stale"),
   analyticsName: "Mark document as reviewed",
   section: ActiveDocumentSection,
   icon: <DoneIcon />,
@@ -1318,7 +1318,7 @@ export const markDocumentAsReviewed = createAction({
     await document.review();
 
     toast.success(
-      t("Marked {{ documentName }} as reviewed", {
+      t("Marked {{ documentName }} as not stale", {
         documentName: document.noun,
       })
     );
