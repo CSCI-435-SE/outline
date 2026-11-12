@@ -206,13 +206,19 @@ function DocumentHeader({
           {document.title}
           {document.isArchived && <Badge>{t("Archived")}</Badge>}
           {document.isDraft && <Badge>{t("Draft")}</Badge>}
-          {!isRevision && <ReviewStatusBadge document={document} />}
         </Flex>
       }
       actions={({ isCompact }) => (
         <>
           <ObservingBanner />
           <SearchHighlightChip />
+          {/* The title area above is only shown once the page is scrolled, so
+          the review status lives with the actions to stay visible. */}
+          {!isRevision && document.visibleReviewStatus && (
+            <Action>
+              <ReviewStatusBadge document={document} />
+            </Action>
+          )}
           {!isDeleted && !isRevision && can.listViews && (
             <Collaborators
               document={document}
