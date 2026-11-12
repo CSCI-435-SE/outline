@@ -9,55 +9,77 @@ const t = ((key: string, options?: Record<string, string>) =>
     : key) as unknown as TFunction;
 
 describe("reviewStatusDisplay", () => {
-  const withReviewer = { hasReviewer: true, reviewerName: "Sam" };
+  const people = {
+    hasReviewer: true,
+    reviewerName: "Sam",
+    requesterName: "Alex",
+  };
 
   test("should show nothing when there is no review status", () => {
-    expect(reviewStatusDisplay(null, withReviewer, t)).toBeNull();
+    expect(reviewStatusDisplay(null, people, t)).toBeNull();
   });
 
   test("should not use the word Draft for the draft status", () => {
-    expect(
-      reviewStatusDisplay(DocumentReviewStatus.Draft, withReviewer, t)
-    ).toEqual({ label: "Needs review" });
+    expect(reviewStatusDisplay(DocumentReviewStatus.Draft, people, t)).toEqual({
+      label: "Needs review",
+      details: "Previously approved by Sam",
+    });
   });
 
-  test("should name the reviewer when the document is in review", () => {
+  test("should name the reviewer and who asked for the review", () => {
     expect(
-      reviewStatusDisplay(DocumentReviewStatus.InReview, withReviewer, t)
-    ).toEqual({ label: "In review · Sam" });
+      reviewStatusDisplay(DocumentReviewStatus.InReview, people, t)
+    ).toEqual({
+      label: "In review · Sam",
+      details: "Review requested by Alex",
+    });
   });
 
-  test("should not name the reviewer before their details have loaded", () => {
+  test("should credit the reviewer, not the requester, with their decision", () => {
+    expect(
+      reviewStatusDisplay(DocumentReviewStatus.ChangesRequested, people, t)
+    ).toEqual({
+      label: "Changes requested",
+      variant: "yellow",
+      details: "Changes requested by Sam",
+    });
+    expect(
+      reviewStatusDisplay(DocumentReviewStatus.Approved, people, t)
+    ).toEqual({
+      label: "Approved",
+      variant: "primary",
+      details: "Approved by Sam",
+    });
+  });
+
+  test("should leave out names that have not loaded yet", () => {
     expect(
       reviewStatusDisplay(
         DocumentReviewStatus.InReview,
         { hasReviewer: true },
         t
       )
-    ).toEqual({ label: "In review" });
+    ).toEqual({ label: "In review", details: undefined });
+    expect(
+      reviewStatusDisplay(
+        DocumentReviewStatus.ChangesRequested,
+        { hasReviewer: true },
+        t
+      )?.details
+    ).toBeUndefined();
   });
 
   test("should say the reviewer is unavailable when they were removed", () => {
     expect(
       reviewStatusDisplay(
         DocumentReviewStatus.InReview,
-        { hasReviewer: false },
+        { hasReviewer: false, requesterName: "Alex" },
         t
       )
-    ).toEqual({ label: "In review · Reviewer unavailable" });
-  });
-
-  test("should highlight changes requested and approved", () => {
-    expect(
-      reviewStatusDisplay(
-        DocumentReviewStatus.ChangesRequested,
-        withReviewer,
-        t
-      )
-    ).toEqual({ label: "Changes requested", variant: "yellow" });
-    expect(
-      reviewStatusDisplay(DocumentReviewStatus.Approved, withReviewer, t)
-    ).toEqual({ label: "Approved", variant: "primary" });
+    ).toEqual({
+      label: "In review · Reviewer unavailable",
+      details: "Review requested by Alex",
+    });
   });
 });
 

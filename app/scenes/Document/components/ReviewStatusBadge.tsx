@@ -17,42 +17,74 @@ type ReviewStatusDisplay = {
   label: string;
   /** The badge color, the default is a neutral outline. */
   variant?: "yellow" | "primary";
+  /** Who did what to reach this status, shown on hover. */
+  details?: string;
+};
+
+type ReviewPeople = {
+  /** Whether the document has a reviewer, they are cleared when deleted. */
+  hasReviewer: boolean;
+  /** The reviewer's name, once loaded. */
+  reviewerName?: string;
+  /** The name of the user who requested the review, once loaded. */
+  requesterName?: string;
 };
 
 /**
- * The badge text and color for a review status.
+ * The badge text, color and hover details for a review status. Only the
+ * reviewer can approve or request changes, and only an edit moves an approved
+ * document back to draft, so the details name the person who acted.
  *
  * @param status The review status to show, null when there is none.
- * @param reviewer Whether the document has a reviewer, and their name if it
- * has been loaded.
+ * @param people The reviewer and requester of the document.
  * @param t The translation function.
  * @returns The badge to show, or null when no badge should be shown.
  */
 export function reviewStatusDisplay(
   status: DocumentReviewStatus | null,
-  reviewer: { hasReviewer: boolean; reviewerName?: string },
+  people: ReviewPeople,
   t: TFunction
 ): ReviewStatusDisplay | null {
+  const { hasReviewer, reviewerName, requesterName } = people;
+
   switch (status) {
     case DocumentReviewStatus.Draft:
       // "Draft" already means unpublished in Outline, so use other wording.
-      return { label: t("Needs review") };
-    case DocumentReviewStatus.InReview:
-      // The reviewer is cleared when their account is deleted.
-      if (!reviewer.hasReviewer) {
-        return { label: t("In review · Reviewer unavailable") };
-      }
       return {
-        label: reviewer.reviewerName
-          ? t("In review · {{ reviewerName }}", {
-              reviewerName: reviewer.reviewerName,
+        label: t("Needs review"),
+        details: reviewerName
+          ? t("Previously approved by {{ userName }}", {
+              userName: reviewerName,
             })
-          : t("In review"),
+          : undefined,
+      };
+    case DocumentReviewStatus.InReview:
+      return {
+        label: !hasReviewer
+          ? t("In review · Reviewer unavailable")
+          : reviewerName
+            ? t("In review · {{ reviewerName }}", { reviewerName })
+            : t("In review"),
+        details: requesterName
+          ? t("Review requested by {{ userName }}", { userName: requesterName })
+          : undefined,
       };
     case DocumentReviewStatus.ChangesRequested:
-      return { label: t("Changes requested"), variant: "yellow" };
+      return {
+        label: t("Changes requested"),
+        variant: "yellow",
+        details: reviewerName
+          ? t("Changes requested by {{ userName }}", { userName: reviewerName })
+          : undefined,
+      };
     case DocumentReviewStatus.Approved:
-      return { label: t("Approved"), variant: "primary" };
+      return {
+        label: t("Approved"),
+        variant: "primary",
+        details: reviewerName
+          ? t("Approved by {{ userName }}", { userName: reviewerName })
+          : undefined,
+      };
     default:
       return null;
   }
@@ -85,22 +117,17 @@ function ReviewStatusBadge({ document }: Props) {
 
   const display = reviewStatusDisplay(
     status,
-    { hasReviewer: !!reviewerId, reviewerName: reviewer?.name },
+    {
+      hasReviewer: !!reviewerId,
+      reviewerName: reviewer?.name,
+      requesterName: requester?.name,
+    },
     t
   );
   if (!display) {
     return null;
   }
-  const { label, variant } = display;
-
-  const details = [
-    requester
-      ? t("Requested by {{ userName }}", { userName: requester.name })
-      : undefined,
-    reviewer
-      ? t("Reviewer: {{ userName }}", { userName: reviewer.name })
-      : undefined,
-  ].filter(Boolean);
+  const { label, variant, details } = display;
 
   const badge = (
     <Badge yellow={variant === "yellow"} primary={variant === "primary"}>
@@ -108,8 +135,8 @@ function ReviewStatusBadge({ document }: Props) {
     </Badge>
   );
 
-  return details.length ? (
-    <Tooltip content={details.join(" · ")} placement="bottom">
+  return details ? (
+    <Tooltip content={details} placement="bottom">
       {badge}
     </Tooltip>
   ) : (

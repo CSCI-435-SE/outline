@@ -1889,8 +1889,10 @@
   "In review": "In review",
   "In review · Reviewer unavailable": "In review · Reviewer unavailable",
   "Approved": "Approved",
-  "Requested by {{ userName }}": "Requested by {{ userName }}",
-  "Reviewer: {{ userName }}": "Reviewer: {{ userName }}",
   "Review workflow": "Review workflow",
-  "When enabled, members can request reviews and reviewers can approve documents": "When enabled, members can request reviews and reviewers can approve documents"
+  "When enabled, members can request reviews and reviewers can approve documents": "When enabled, members can request reviews and reviewers can approve documents",
+  "Previously approved by {{ userName }}": "Previously approved by {{ userName }}",
+  "Review requested by {{ userName }}": "Review requested by {{ userName }}",
+  "Changes requested by {{ userName }}": "Changes requested by {{ userName }}",
+  "Approved by {{ userName }}": "Approved by {{ userName }}"
 }
