@@ -1,5 +1,6 @@
 import { Node } from "prosemirror-model";
 import { prosemirrorToYDoc } from "y-prosemirror";
+import { DocumentReviewStatus } from "@shared/types";
 import { schema } from "@server/editor";
 import type { Document } from "@server/models";
 import { Collection } from "@server/models";
@@ -77,6 +78,76 @@ describe("documentCollaborativeUpdater", () => {
 
     await document.reload();
     expect(document.updatedAt).toEqual(updatedAt);
+  });
+
+  describe("reviewStatus", () => {
+    const content = [
+      {
+        type: "paragraph",
+        content: [{ type: "text", text: "Edited after review" }],
+      },
+    ];
+
+    it("moves an approved document to draft", async () => {
+      const user = await buildUser();
+      const document = await buildDocument({
+        teamId: user.teamId,
+        userId: user.id,
+        reviewStatus: DocumentReviewStatus.Approved,
+      });
+
+      await documentCollaborativeUpdater({
+        documentId: document.id,
+        ydoc: buildYDoc(content),
+        sessionCollaboratorIds: [user.id],
+        isLastConnection: true,
+        clientVersion: null,
+      });
+
+      await document.reload();
+      expect(document.reviewStatus).toBe(DocumentReviewStatus.Draft);
+    });
+
+    it("keeps the approval when content is unchanged", async () => {
+      const user = await buildUser();
+      const document = await buildDocument({
+        teamId: user.teamId,
+        userId: user.id,
+        content: Node.fromJSON(schema, { type: "doc", content }).toJSON(),
+        reviewStatus: DocumentReviewStatus.Approved,
+      });
+
+      await documentCollaborativeUpdater({
+        documentId: document.id,
+        ydoc: buildYDoc(content),
+        sessionCollaboratorIds: [user.id],
+        isLastConnection: true,
+        clientVersion: null,
+      });
+
+      await document.reload();
+      expect(document.reviewStatus).toBe(DocumentReviewStatus.Approved);
+    });
+
+    it("does not change a document that is in review", async () => {
+      const user = await buildUser();
+      const document = await buildDocument({
+        teamId: user.teamId,
+        userId: user.id,
+        reviewStatus: DocumentReviewStatus.InReview,
+      });
+
+      await documentCollaborativeUpdater({
+        documentId: document.id,
+        ydoc: buildYDoc(content),
+        sessionCollaboratorIds: [user.id],
+        isLastConnection: true,
+        clientVersion: null,
+      });
+
+      await document.reload();
+      expect(document.reviewStatus).toBe(DocumentReviewStatus.InReview);
+    });
   });
 
   describe("lastEditedAt", () => {

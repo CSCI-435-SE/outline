@@ -172,6 +172,53 @@ describe("review", () => {
     await expect(document.save()).rejects.toThrow();
   });
 
+  test("should move an approved document to draft when its text is edited", async () => {
+    const document = await buildDocument({
+      reviewStatus: DocumentReviewStatus.Approved,
+    });
+    document.text = "edited after approval";
+    await document.save();
+    await document.reload();
+
+    expect(document.reviewStatus).toBe(DocumentReviewStatus.Draft);
+  });
+
+  test("should move an approved document to draft when its title is edited", async () => {
+    const document = await buildDocument({
+      reviewStatus: DocumentReviewStatus.Approved,
+    });
+    document.title = "renamed after approval";
+    await document.save();
+    await document.reload();
+
+    expect(document.reviewStatus).toBe(DocumentReviewStatus.Draft);
+  });
+
+  test("should keep an approval when a non-content field changes", async () => {
+    const document = await buildDocument({
+      reviewStatus: DocumentReviewStatus.Approved,
+    });
+    document.fullWidth = true;
+    await document.save();
+    await document.reload();
+
+    expect(document.reviewStatus).toBe(DocumentReviewStatus.Approved);
+  });
+
+  test.each([
+    DocumentReviewStatus.Draft,
+    DocumentReviewStatus.InReview,
+    DocumentReviewStatus.ChangesRequested,
+    null,
+  ])("should not change a %s review status when edited", async (status) => {
+    const document = await buildDocument({ reviewStatus: status });
+    document.text = "edited";
+    await document.save();
+    await document.reload();
+
+    expect(document.reviewStatus).toBe(status);
+  });
+
   test("should not include review fields in changesets", async () => {
     const document = await buildDocument();
     expect(getChangesetSkipped(document)).toEqual(
@@ -191,8 +238,9 @@ describe("lastEditedAt", () => {
     const collection = await Collection.findByPk(document.collectionId!, {
       includeDocumentStructure: true,
     });
-    return collection!.documentStructure!.find((node) => node.id === document.id)
-      ?.lastEditedAt;
+    return collection!.documentStructure!.find(
+      (node) => node.id === document.id
+    )?.lastEditedAt;
   };
 
   test("should be set on create", async () => {
@@ -212,9 +260,7 @@ describe("lastEditedAt", () => {
     await document.update({ lastEditedAt: longAgo }, { hooks: false });
     document.text = "changed";
     await document.save();
-    expect(document.lastEditedAt!.getTime()).toBeGreaterThan(
-      longAgo.getTime()
-    );
+    expect(document.lastEditedAt!.getTime()).toBeGreaterThan(longAgo.getTime());
   });
 
   test("should update when title changes", async () => {
@@ -222,9 +268,7 @@ describe("lastEditedAt", () => {
     await document.update({ lastEditedAt: longAgo }, { hooks: false });
     document.title = "Renamed";
     await document.save();
-    expect(document.lastEditedAt!.getTime()).toBeGreaterThan(
-      longAgo.getTime()
-    );
+    expect(document.lastEditedAt!.getTime()).toBeGreaterThan(longAgo.getTime());
   });
 
   test("should not update when moved to another collection", async () => {
