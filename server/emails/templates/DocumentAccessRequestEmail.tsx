@@ -70,7 +70,7 @@ export default class DocumentAccessRequestEmail extends BaseEmail<
   protected renderAsText({ actor, teamUrl, document, reason }: Props): string {
     return `
 ${actor.name} is requesting access to "${document.titleWithDefault}".
-${reason ? `\nReason: ${reason}\n` : ""}
+${reason ? `\nReason: ${reason.replace(/\s+/g, " ")}\n` : ""}
 Open the document to share it with them: ${teamUrl}${document.path}
 `;
   }
