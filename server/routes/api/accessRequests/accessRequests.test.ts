@@ -498,6 +498,52 @@ describe("#accessRequests.approve", () => {
     expect(memberships[0].permission).toEqual(DocumentPermission.ReadWrite);
   });
 
+  it("should not lower the permission of an existing membership", async () => {
+    const team = await buildTeam();
+    const requester = await buildUser({ teamId: team.id });
+    const admin = await buildAdmin({ teamId: team.id });
+    const document = await buildDocument({
+      createdById: admin.id,
+      teamId: team.id,
+    });
+
+    // Access granted separately, e.g. through the share dialog, while the
+    // request was still pending.
+    await UserMembership.create({
+      userId: requester.id,
+      documentId: document.id,
+      createdById: admin.id,
+      permission: DocumentPermission.ReadWrite,
+    });
+
+    const accessRequest = await AccessRequest.create({
+      documentId: document.id,
+      userId: requester.id,
+      teamId: team.id,
+      status: AccessRequestStatus.Pending,
+    });
+
+    const res = await server.post("/api/accessRequests.approve", admin, {
+      body: {
+        id: accessRequest.id,
+        permission: DocumentPermission.Read,
+      },
+    });
+    const body = await res.json();
+
+    expect(res.status).toEqual(200);
+    expect(body.data.status).toEqual(AccessRequestStatus.Approved);
+
+    const memberships = await UserMembership.findAll({
+      where: {
+        userId: requester.id,
+        documentId: document.id,
+      },
+    });
+    expect(memberships).toHaveLength(1);
+    expect(memberships[0].permission).toEqual(DocumentPermission.ReadWrite);
+  });
+
   it("should not allow approving requests that have been responded to", async () => {
     const team = await buildTeam();
     const requester = await buildUser({ teamId: team.id });
