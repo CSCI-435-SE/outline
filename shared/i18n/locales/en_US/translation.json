@@ -788,6 +788,8 @@
   "No expiration": "No expiration",
   "The document archive is empty at the moment.": "The document archive is empty at the moment.",
   "Done editing": "Done editing",
+  "Possible credential detected": "Possible credential detected",
+  "“{{ documentTitle }}” may contain: {{ credentialTypes }}. Anyone with access to the document can see it, consider removing it.": "“{{ documentTitle }}” may contain: {{ credentialTypes }}. Anyone with access to the document can see it, consider removing it.",
   "Drop documents to import": "Drop documents to import",
   "<em>{{ collectionName }}</em> doesn’t contain any\n                    documents yet.": "<em>{{ collectionName }}</em> doesn’t contain any\n                    documents yet.",
   "{{ usersCount }} users and {{ groupsCount }} groups with access_one": "{{ usersCount }} users and {{ groupsCount }} groups with access",

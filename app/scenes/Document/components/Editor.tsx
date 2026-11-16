@@ -84,6 +84,7 @@ function DocumentEditor(props: Props, ref: React.ForwardedRef<SharedEditor>) {
     readOnly,
     children,
     multiplayer,
+    onChange,
     ...rest
   } = props;
   const can = usePolicy(document);
@@ -183,6 +184,14 @@ function DocumentEditor(props: Props, ref: React.ForwardedRef<SharedEditor>) {
     updateState: updateDocState,
   } = useDocumentContext();
   const handleRefChanged = React.useCallback(setEditor, [setEditor]);
+
+  const handleChange = React.useCallback<NonNullable<EditorProps["onChange"]>>(
+    (value, event) => {
+      updateDocState();
+      onChange?.(value, event);
+    },
+    [updateDocState, onChange]
+  );
   const EditorComponent = multiplayer ? MultiplayerEditor : Editor;
 
   const childOffsetHeight = childRef.current?.offsetHeight || 0;
@@ -270,7 +279,7 @@ function DocumentEditor(props: Props, ref: React.ForwardedRef<SharedEditor>) {
         }
         onInit={handleInit}
         onDestroy={handleDestroy}
-        onChange={updateDocState}
+        onChange={handleChange}
         extensions={extensions}
         editorStyle={editorStyle}
         {...rest}

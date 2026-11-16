@@ -31,6 +31,7 @@ import isTextInput from "~/utils/isTextInput";
 import { client } from "~/utils/ApiClient";
 import { emojiToUrl } from "~/utils/emoji";
 import { documentHistoryPath, documentEditPath } from "~/utils/routeHelpers";
+import { useCredentialScan } from "../hooks/useCredentialScan";
 import { useDocumentSave } from "../hooks/useDocumentSave";
 import Container from "./Container";
 import Contents from "./Contents";
@@ -105,6 +106,25 @@ function DocumentScene({
     onFileUploadStart,
     onFileUploadStop,
   } = useDocumentSave({ document, editorRef, readOnly });
+
+  const {
+    handleChange: handleCredentialScanChange,
+    flush: flushCredentialScan,
+  } = useCredentialScan({
+    document,
+    editorRef,
+    enabled: !readOnly && !!abilities.update,
+  });
+
+  // Saves ("Save draft", "Done editing", publish, title blur) also scan any
+  // edits still waiting on the debounce, so the warning is not missed.
+  const onSaveAndScan = useCallback(
+    (options: Parameters<typeof onSave>[0] = {}) => {
+      flushCredentialScan();
+      return onSave(options);
+    },
+    [flushCredentialScan, onSave]
+  );
 
   const onSynced = useCallback(async () => {
     const restore = location.state?.restore;
@@ -245,7 +265,7 @@ function DocumentScene({
       }
 
       if (document?.collectionId) {
-        void onSave({
+        void onSaveAndScan({
           publish: true,
           done: true,
         });
@@ -256,7 +276,7 @@ function DocumentScene({
         });
       }
     },
-    [document, dialogs, t, onSave]
+    [document, dialogs, t, onSaveAndScan]
   );
 
   const handlePublishShortcut = useCallback(
@@ -354,7 +374,7 @@ function DocumentScene({
               }
               savingIsDisabled={document.isSaving || isEmpty}
               onSelectTemplate={handleSelectTemplate}
-              onSave={onSave}
+              onSave={onSaveAndScan}
             />
           )}
           <Main
@@ -412,7 +432,8 @@ function DocumentScene({
                       onCreateLink={onCreateLink}
                       onChangeTitle={handleChangeTitle}
                       onChangeIcon={handleChangeIcon}
-                      onSave={onSave}
+                      onSave={onSaveAndScan}
+                      onChange={handleCredentialScanChange}
                       onPublish={onPublish}
                       onCancel={goBack}
                       readOnly={readOnly}

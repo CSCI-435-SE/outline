@@ -70,6 +70,43 @@ export const credentialPatterns: CredentialPattern[] = [
 ];
 
 /**
+ * A single credential occurrence found in scanned text.
+ */
+export type CredentialMatch = {
+  /** Name of the credential pattern that matched. */
+  name: string;
+  /**
+   * The exact matched text. This is the secret itself, so callers must not
+   * log, persist, or send it anywhere; hash or mask it first.
+   */
+  value: string;
+  /** Offset of the match within the scanned text. */
+  index: number;
+};
+
+/**
+ * Finds every credential occurrence in the text, including repeated
+ * occurrences of the same pattern, ordered by position.
+ *
+ * @param text The plain text content to scan.
+ * @returns An array of matches with the pattern name, matched text, and offset.
+ */
+export function findCredentialMatches(text: string): CredentialMatch[] {
+  const matches: CredentialMatch[] = [];
+
+  for (const { name, pattern } of credentialPatterns) {
+    // Library patterns are non-global, so build a global copy for matchAll
+    // rather than mutating the shared regex.
+    const globalPattern = new RegExp(pattern.source, `${pattern.flags}g`);
+    for (const match of text.matchAll(globalPattern)) {
+      matches.push({ name, value: match[0], index: match.index ?? 0 });
+    }
+  }
+
+  return matches.sort((x, y) => x.index - y.index);
+}
+
+/**
  * Scans text content against all credential patterns and returns any matches.
  *
  * @param text The plain text content to scan.

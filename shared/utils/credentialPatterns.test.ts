@@ -1,4 +1,8 @@
-import { scanForCredentials, credentialPatterns } from "./credentialPatterns";
+import {
+  scanForCredentials,
+  credentialPatterns,
+  findCredentialMatches,
+} from "./credentialPatterns";
 
 const a = (n: number) => "A".repeat(n);
 
@@ -41,7 +45,11 @@ describe("credentialPatterns: should detect", () => {
     ["Slack Token", "bot token", "xoxb-1234567890-abcdefghij"],
     ["Google API Key", "plain", `key=AIza${a(35)}`],
     ["Google API Key", "ends with dash", `AIza${a(34)}-`],
-    ["Bearer Token", "JWT", "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.abc123"],
+    [
+      "Bearer Token",
+      "JWT",
+      "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.abc123",
+    ],
     ["Bearer Token", "lowercase", `bearer ${a(10)}1234567890`],
   ];
 
@@ -79,13 +87,61 @@ describe("credentialPatterns: should NOT detect", () => {
     ["placeholder secret", "client_secret=<your-client-secret>"],
     ["URL with an email later", "see postgres://localhost:5432/db or me@x.com"],
     ["https URL with credentials", "https://user:pass@example.com/path"],
-    ["PRIVATE KEY mention in prose", "Never share your PRIVATE KEY with anyone."],
+    [
+      "PRIVATE KEY mention in prose",
+      "Never share your PRIVATE KEY with anyone.",
+    ],
     ["short ghp prefix", "ghp_tooShort"],
     ["short secret value", "secret_key=abc123"],
   ];
 
   it.each(cases)("%s", (_label, text) => {
     expect(scanForCredentials(text)).toHaveLength(0);
+  });
+});
+
+describe("findCredentialMatches", () => {
+  const awsKey1 = `AKIA${a(16)}`;
+  const awsKey2 = `AKIA${"B".repeat(16)}`;
+  const ghToken = `ghp_${"a1".repeat(18)}`;
+
+  it("returns an empty array when nothing matches", () => {
+    expect(findCredentialMatches("nothing to see here")).toEqual([]);
+  });
+
+  it("returns the matched text, pattern name, and offset", () => {
+    const text = `key: ${awsKey1}`;
+    expect(findCredentialMatches(text)).toEqual([
+      { name: "AWS Access Key ID", value: awsKey1, index: 5 },
+    ]);
+  });
+
+  it("returns every occurrence of the same pattern", () => {
+    const matches = findCredentialMatches(`${awsKey1} then ${awsKey2}`);
+    expect(matches.map((m) => m.value)).toEqual([awsKey1, awsKey2]);
+    expect(matches.every((m) => m.name === "AWS Access Key ID")).toBe(true);
+  });
+
+  it("orders matches from different patterns by position", () => {
+    const matches = findCredentialMatches(`${ghToken} and ${awsKey1}`);
+    expect(matches.map((m) => m.name)).toEqual([
+      "GitHub Token",
+      "AWS Access Key ID",
+    ]);
+  });
+
+  it("finds the same pattern names as scanForCredentials", () => {
+    const text = `${awsKey1}\n${ghToken}\npostgres://u:p@host/db`;
+    const names = new Set(findCredentialMatches(text).map((m) => m.name));
+    expect([...names].sort()).toEqual(scanForCredentials(text).sort());
+  });
+
+  it("does not mutate the shared library patterns", () => {
+    findCredentialMatches(`${awsKey1} ${awsKey2}`);
+    for (const { pattern } of credentialPatterns) {
+      expect(pattern.global).toBe(false);
+      expect(pattern.lastIndex).toBe(0);
+    }
   });
 });
 
