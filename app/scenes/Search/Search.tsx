@@ -41,6 +41,7 @@ import RecentSearches from "./components/RecentSearches";
 import SearchInput from "./components/SearchInput";
 import { SortInput } from "./components/SortInput";
 import UserFilter from "./components/UserFilter";
+import { getFilterVisibility } from "./filterVisibility";
 import { HStack } from "~/components/primitives/HStack";
 import useMobile from "~/hooks/useMobile";
 
@@ -107,15 +108,10 @@ function Search() {
 
   const document = documentId ? documents.get(documentId) : undefined;
 
-  const filterVisibility = {
-    document: !!document,
-    collection: !document,
-    user: !document || !!(document && query),
-    documentType: isSearchable,
-    date: isSearchable,
-    title: !!query && !document,
-    sort: isSearchable,
-  };
+  const filterVisibility = getFilterVisibility({
+    hasDocument: !!document,
+    query,
+  });
 
   const filters = React.useMemo(
     () => ({
@@ -292,13 +288,12 @@ function Search() {
             name="query"
             key={query ? "search" : "recent"}
             ref={searchInputRef}
-            placeholder={`${
-              documentId
-                ? t("Search in document")
-                : collectionId
-                  ? t("Search in collection")
-                  : t("Search")
-            }…`}
+            placeholder={`${documentId
+              ? t("Search in document")
+              : collectionId
+                ? t("Search in collection")
+                : t("Search")
+              }…`}
             onKeyDown={handleKeyDown}
             defaultValue={query ?? ""}
           />
@@ -400,14 +395,14 @@ function Search() {
                 {() =>
                   data?.length && !error
                     ? data.map((result) => (
-                        <DocumentListItem
-                          key={result.document.id}
-                          document={result.document}
-                          highlight={query}
-                          context={result.context}
-                          showCollection
-                        />
-                      ))
+                      <DocumentListItem
+                        key={result.document.id}
+                        document={result.document}
+                        highlight={query}
+                        context={result.context}
+                        showCollection
+                      />
+                    ))
                     : null
                 }
               </StyledArrowKeyNavigation>
