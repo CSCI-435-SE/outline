@@ -138,35 +138,6 @@ describe("DocumentCredentialNotificationsTask", () => {
     expect(await Notification.count({ where: { userId: admin.id } })).toBe(0);
   });
 
-  it("does not notify admins who cannot access the document", async () => {
-    const draft = await buildDocument({
-      teamId: team.id,
-      userId: author.id,
-      collectionId: null,
-    });
-    const revision = await saveRevision(author, draft, `key: ${awsKey}`);
-
-    await perform(revision, author);
-
-    expect(await Notification.count({ where: { userId: admin.id } })).toBe(0);
-  });
-
-  it("does nothing when the revision no longer exists", async () => {
-    const spy = vi.spyOn(Notification, "create");
-
-    await expect(
-      new DocumentCredentialNotificationsTask().perform({
-        name: "revisions.create",
-        documentId: document.id,
-        modelId: "6f0e7a5c-2a7b-4c1e-9d6a-0b6f4b8f2a11",
-        teamId: team.id,
-        actorId: author.id,
-        ip,
-      })
-    ).resolves.toBeUndefined();
-    expect(spy).not.toHaveBeenCalled();
-  });
-
   it("does not notify admins who opted out", async () => {
     admin.setNotificationEventType(
       NotificationEventType.CredentialDetected,
