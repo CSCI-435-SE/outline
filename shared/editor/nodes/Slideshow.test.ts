@@ -1,4 +1,5 @@
-import type { EditorState, Transaction } from "prosemirror-state";
+import { history, undo } from "prosemirror-history";
+import type { Command, EditorState, Transaction } from "prosemirror-state";
 import { NodeSelection } from "prosemirror-state";
 import {
   createEditorState,
@@ -114,7 +115,12 @@ describe("slideshow toolbar", () => {
 
   it("lists the speeds and marks the current one active", () => {
     const state = selectedSlideshow(5000);
-    const [item] = menu.getItems(context(state));
+    const item = menu
+      .getItems(context(state))
+      .find((candidate) => candidate.name === "slideshowInterval");
+    if (!item) {
+      throw new Error("No speed menu");
+    }
     const children = Array.isArray(item.children) ? item.children : [];
 
     expect(item.label).toBe(formatSlideshowInterval(5000));
@@ -130,5 +136,179 @@ describe("slideshow toolbar", () => {
         .filter((child) => child.active?.(state))
         .map((child) => child.label)
     ).toEqual([formatSlideshowInterval(5000)]);
+  });
+});
+
+describe("slideshow add images button", () => {
+  const [menu] = extension.selectionToolbarMenus();
+
+  it("is hidden when the editor can't upload files", () => {
+    const state = selectedSlideshow();
+    const item = menu
+      .getItems(
+        buildSelectionContext(state, {
+          readOnly: false,
+          isTemplate: false,
+          rtl: false,
+        })
+      )
+      .find((candidate) => candidate.name === "uploadSlideshowImages");
+
+    expect(item?.visible).toBe(false);
+  });
+});
+
+describe("slideshow image commands", () => {
+  const a = "https://example.com/a.png";
+  const b = "https://example.com/b.png";
+  const c = "https://example.com/c.png";
+  const commands = extension.commands({ type: schema.nodes.slideshow });
+
+  /**
+   * Creates a state with a slideshow of the given images selected, tracking
+   * history so changes can be undone.
+   */
+  function withImages(images: string[]) {
+    const state = createEditorState(
+      schema.nodes.doc.create(null, [
+        p("Before"),
+        schema.nodes.slideshow.create({ images, interval: 5000 }),
+        p("After"),
+      ]),
+      [history()]
+    );
+    return state.apply(
+      state.tr.setSelection(NodeSelection.create(state.doc, 8))
+    );
+  }
+
+  function apply(state: EditorState, command: Command) {
+    let next = state;
+    const result = command(state, (tr: Transaction) => {
+      next = state.apply(tr);
+    });
+    return { result, state: next };
+  }
+
+  function imagesOf(state: EditorState) {
+    const [node] = findNodes(state.doc.toJSON(), "slideshow");
+    return node?.attrs?.images;
+  }
+
+  function undoOnce(state: EditorState) {
+    let next = state;
+    undo(state, (tr: Transaction) => {
+      next = state.apply(tr);
+    });
+    return next;
+  }
+
+  it("adds images to the end and keeps the slideshow selected", () => {
+    const { result, state } = apply(
+      withImages([a]),
+      commands.addSlideshowImages({ images: [b, c] })
+    );
+
+    expect(result).toBe(true);
+    expect(imagesOf(state)).toEqual([a, b, c]);
+    expect(state.selection).toBeInstanceOf(NodeSelection);
+    expect((state.selection as NodeSelection).node.attrs.interval).toBe(5000);
+  });
+
+  it("does nothing when no usable images are added", () => {
+    const { result } = apply(
+      withImages([a]),
+      commands.addSlideshowImages({ images: ["javascript:alert(1)"] })
+    );
+
+    expect(result).toBe(false);
+  });
+
+  it("removes an image", () => {
+    const { result, state } = apply(
+      withImages([a, b, c]),
+      commands.removeSlideshowImage({ index: 1 })
+    );
+
+    expect(result).toBe(true);
+    expect(imagesOf(state)).toEqual([a, c]);
+  });
+
+  it("keeps an empty slideshow when the last image is removed", () => {
+    const { state } = apply(
+      withImages([a]),
+      commands.removeSlideshowImage({ index: 0 })
+    );
+
+    expect(imagesOf(state)).toEqual([]);
+    expect(findNodes(state.doc.toJSON(), "slideshow")).toHaveLength(1);
+    expect(state.selection).toBeInstanceOf(NodeSelection);
+  });
+
+  it("reorders images", () => {
+    const { result, state } = apply(
+      withImages([a, b, c]),
+      commands.moveSlideshowImage({ from: 2, to: 0 })
+    );
+
+    expect(result).toBe(true);
+    expect(imagesOf(state)).toEqual([c, a, b]);
+  });
+
+  it("rejects invalid indexes", () => {
+    const state = withImages([a, b]);
+
+    expect(
+      apply(state, commands.removeSlideshowImage({ index: 2 })).result
+    ).toBe(false);
+    expect(
+      apply(state, commands.removeSlideshowImage({ index: "0" })).result
+    ).toBe(false);
+    expect(apply(state, commands.removeSlideshowImage()).result).toBe(false);
+    expect(
+      apply(state, commands.moveSlideshowImage({ from: 0, to: 5 })).result
+    ).toBe(false);
+    expect(
+      apply(state, commands.moveSlideshowImage({ from: 1, to: 1 })).result
+    ).toBe(false);
+  });
+
+  it("does nothing when no slideshow is selected", () => {
+    const state = createEditorState(schema.nodes.doc.create(null, [p("Hi")]));
+
+    expect(
+      apply(state, commands.addSlideshowImages({ images: [a] })).result
+    ).toBe(false);
+    expect(
+      apply(state, commands.removeSlideshowImage({ index: 0 })).result
+    ).toBe(false);
+    expect(
+      apply(state, commands.moveSlideshowImage({ from: 0, to: 1 })).result
+    ).toBe(false);
+  });
+
+  it.each([
+    ["add", commands.addSlideshowImages({ images: [c] })],
+    ["remove", commands.removeSlideshowImage({ index: 0 })],
+    ["reorder", commands.moveSlideshowImage({ from: 0, to: 1 })],
+  ])("undoes %s in a single step", (_name, command) => {
+    const initial = withImages([a, b]);
+    const { state } = apply(initial, command);
+
+    expect(imagesOf(state)).not.toEqual([a, b]);
+    expect(imagesOf(undoOnce(state))).toEqual([a, b]);
+  });
+
+  it("round trips edited images through markdown", () => {
+    let { state } = apply(
+      withImages([a, b]),
+      commands.addSlideshowImages({ images: [c] })
+    );
+    ({ state } = apply(state, commands.moveSlideshowImage({ from: 2, to: 0 })));
+    ({ state } = apply(state, commands.removeSlideshowImage({ index: 1 })));
+    const markdown = serializer.serialize(state.doc);
+
+    expect(imagesOf(state)).toEqual([c, b]);
+    expect(parser.parse(markdown)?.toJSON()).toEqual(state.doc.toJSON());
   });
 });

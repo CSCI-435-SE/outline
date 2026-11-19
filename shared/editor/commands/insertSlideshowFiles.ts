@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/react";
 import { t } from "i18next";
 import type { Node as ProsemirrorNode } from "prosemirror-model";
+import type { Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
@@ -10,6 +11,8 @@ import {
   DEFAULT_SLIDESHOW_INTERVAL,
   getUploadedSlideshowImages,
   isSlideshowImageUrl,
+  mergeSlideshowUploads,
+  toSlideshowAttrs,
 } from "../lib/slideshow";
 import type { SlideshowUploadAction } from "../plugins/SlideshowUploadPlugin";
 import {
@@ -49,17 +52,7 @@ export default function insertSlideshowFiles(
   files: File[],
   options: SlideshowUploadOptions
 ): string | undefined {
-  const images = files.filter((file) =>
-    AttachmentValidation.imageContentTypes.includes(file.type)
-  );
-
-  if (images.length < files.length) {
-    toast.error(
-      images.length
-        ? t("Some files were skipped because they aren’t images")
-        : t("Choose one or more image files")
-    );
-  }
+  const images = filterImages(files);
   if (!images.length) {
     return undefined;
   }
@@ -76,6 +69,57 @@ export default function insertSlideshowFiles(
     return undefined;
   }
 
+  return startUploads(view, tr.scrollIntoView(), pos, images, options);
+}
+
+/**
+ * Uploads the given images through attachment storage and adds them to the
+ * end of an existing slideshow, in the order the files were selected. The
+ * images already in the slideshow are kept.
+ *
+ * @param view the editor view.
+ * @param pos the position before the slideshow node.
+ * @param files the files selected by the user.
+ * @param options callbacks to upload files and report progress.
+ * @returns the id of the upload session, or undefined if nothing was uploaded.
+ */
+export function appendSlideshowFiles(
+  view: SlideshowUploadView,
+  pos: number,
+  files: File[],
+  options: SlideshowUploadOptions
+): string | undefined {
+  const node = view.state.doc.nodeAt(pos);
+  if (node?.type !== view.state.schema.nodes.slideshow) {
+    return undefined;
+  }
+
+  const images = filterImages(files);
+  if (!images.length) {
+    return undefined;
+  }
+
+  return startUploads(view, view.state.tr, pos, images, options);
+}
+
+/**
+ * Starts uploading images into the slideshow at the given position, showing
+ * their progress on the slideshow until they have all finished.
+ *
+ * @param view the editor view.
+ * @param tr the transaction to attach the upload session to.
+ * @param pos the position of the slideshow node in the transaction's doc.
+ * @param images the image files to upload.
+ * @param options callbacks to upload files and report progress.
+ * @returns the id of the upload session.
+ */
+function startUploads(
+  view: SlideshowUploadView,
+  tr: Transaction,
+  pos: number,
+  images: File[],
+  options: SlideshowUploadOptions
+): string {
   const sessionId = uuidv4();
   let items: SlideshowUploadItem[] = images.map((file) => ({
     id: uuidv4(),
@@ -86,6 +130,8 @@ export default function insertSlideshowFiles(
   }));
   let pending = 0;
   let finished = false;
+  // The images this session has written to the node so far.
+  let written: string[] = [];
 
   const session = () => ({ id: sessionId, items, retry, dismiss });
 
@@ -113,22 +159,27 @@ export default function insertSlideshowFiles(
   };
 
   // Write the finished images to the node, so they are saved with the
-  // document even while other images are still uploading.
+  // document even while other images are still uploading. Images that were
+  // already in the slideshow, or added by someone else meanwhile, are kept.
   const writeImages = () => {
     if (view.isDestroyed) {
       return;
     }
     const range = findSlideshowUpload(view.state, sessionId);
-    if (!range) {
+    const node = range ? view.state.doc.nodeAt(range.from) : null;
+    if (!range || !node) {
       return;
     }
+    const uploaded = getUploadedSlideshowImages(items);
+    const images = mergeSlideshowUploads(
+      toSlideshowAttrs(node.attrs).images,
+      written,
+      uploaded
+    );
+    written = uploaded;
     view.dispatch(
       view.state.tr
-        .setNodeAttribute(
-          range.from,
-          "images",
-          getUploadedSlideshowImages(items)
-        )
+        .setNodeAttribute(range.from, "images", images)
         .setMeta("addToHistory", false)
     );
   };
@@ -233,13 +284,33 @@ export default function insertSlideshowFiles(
   }
 
   view.dispatch(
-    tr
-      .setMeta(slideshowUploadKey, { add: { pos, session: session() } })
-      .scrollIntoView()
+    tr.setMeta(slideshowUploadKey, { add: { pos, session: session() } })
   );
   items.forEach(upload);
 
   return sessionId;
+}
+
+/**
+ * Returns the image files from the user's selection, telling the user about
+ * any files that were skipped.
+ *
+ * @param files the files selected by the user.
+ * @returns the image files.
+ */
+function filterImages(files: File[]): File[] {
+  const images = files.filter((file) =>
+    AttachmentValidation.imageContentTypes.includes(file.type)
+  );
+
+  if (images.length < files.length) {
+    toast.error(
+      images.length
+        ? t("Some files were skipped because they aren’t images")
+        : t("Choose one or more image files")
+    );
+  }
+  return images;
 }
 
 /**

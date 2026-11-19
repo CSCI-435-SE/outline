@@ -438,6 +438,14 @@ export class ProsemirrorHelper extends SharedProsemirrorHelper {
     }
 
     function replaceAttachmentUrls(node: ProsemirrorData) {
+      // Slideshows keep their image urls in a list rather than a src.
+      const images = node.attrs?.images;
+      if (node.attrs && Array.isArray(images)) {
+        node.attrs.images = images.map((image) =>
+          typeof image === "string" ? getMapping(image) : image
+        );
+      }
+
       if (node.attrs?.src) {
         node.attrs.src = getMapping(node.attrs.src as string);
       } else if (node.attrs?.href) {
@@ -483,6 +491,15 @@ export class ProsemirrorHelper extends SharedProsemirrorHelper {
         urls.push(node.attrs.src);
       } else if (node.type.name === "attachment" && node.attrs.href) {
         urls.push(node.attrs.href);
+      } else if (
+        node.type.name === "slideshow" &&
+        Array.isArray(node.attrs.images)
+      ) {
+        for (const image of node.attrs.images) {
+          if (typeof image === "string") {
+            urls.push(image);
+          }
+        }
       }
     });
 

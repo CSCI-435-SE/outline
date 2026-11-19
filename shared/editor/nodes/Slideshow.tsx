@@ -1,23 +1,29 @@
 import { t } from "i18next";
 import type Token from "markdown-it/lib/token.mjs";
-import { ClockIcon } from "outline-icons";
+import { ClockIcon, PlusIcon } from "outline-icons";
 import type {
   NodeSpec,
   NodeType,
   Node as ProsemirrorNode,
 } from "prosemirror-model";
-import type { Command } from "prosemirror-state";
+import type { Command, EditorState, Transaction } from "prosemirror-state";
 import { NodeSelection, TextSelection } from "prosemirror-state";
 import { getEventFiles } from "../../utils/files";
 import { sanitizeUrl } from "../../utils/urls";
 import { AttachmentValidation } from "../../validations";
-import insertSlideshowFiles from "../commands/insertSlideshowFiles";
+import insertSlideshowFiles, {
+  appendSlideshowFiles,
+} from "../commands/insertSlideshowFiles";
+import { updateSlideshowImages } from "../commands/updateSlideshowImages";
 import SlideshowComponent from "../components/Slideshow";
 import type { MarkdownSerializerState } from "../lib/markdown/serializer";
 import {
   DEFAULT_SLIDESHOW_INTERVAL,
   SLIDESHOW_INTERVALS,
+  addSlideshowImages,
   formatSlideshowInterval,
+  moveSlideshowImage,
+  removeSlideshowImage,
   toSlideshowAttrs,
 } from "../lib/slideshow";
 import { SlideshowUploadPlugin } from "../plugins/SlideshowUploadPlugin";
@@ -107,7 +113,16 @@ export default class Slideshow extends Node {
     };
   }
 
-  component = (props: ComponentProps) => <SlideshowComponent {...props} />;
+  component = (props: ComponentProps) => (
+    <SlideshowComponent
+      {...props}
+      onAddImages={
+        this.editor.props.uploadFile
+          ? () => this.chooseImages(() => props.getPos())
+          : undefined
+      }
+    />
+  );
 
   keys(): Record<string, Command> {
     return {
@@ -152,31 +167,25 @@ export default class Slideshow extends Node {
           return true;
         },
       // Opens a file picker and uploads the chosen images into a new slideshow.
-      uploadSlideshow: (): Command => () => {
-        const {
-          uploadFile,
-          onFileUploadStart,
-          onFileUploadStop,
-          onFileUploadProgress,
-        } = this.editor.props;
-        if (!uploadFile) {
+      uploadSlideshow: (): Command => () => this.chooseImages(),
+      // Opens a file picker and uploads the chosen images to the end of the
+      // selected slideshow.
+      uploadSlideshowImages: (): Command => (state) => {
+        const { selection } = state;
+        if (
+          !(selection instanceof NodeSelection) ||
+          selection.node.type !== type
+        ) {
           return false;
         }
-
-        const inputElement = document.createElement("input");
-        inputElement.type = "file";
-        inputElement.multiple = true;
-        inputElement.accept = AttachmentValidation.imageContentTypes.join(", ");
-        inputElement.onchange = (event) => {
-          insertSlideshowFiles(this.editor.view, getEventFiles(event), {
-            uploadFile,
-            onFileUploadStart,
-            onFileUploadStop,
-            onFileUploadProgress,
-          });
-        };
-        inputElement.click();
-        return true;
+        // Look the slideshow up again once files are chosen, as the document
+        // may have changed while the file picker was open.
+        return this.chooseImages(() => {
+          const current = this.editor.view.state.selection;
+          return current instanceof NodeSelection && current.node.type === type
+            ? current.from
+            : undefined;
+        });
       },
       // Sets how long each image of the selected slideshow is shown for.
       slideshowInterval:
@@ -201,6 +210,37 @@ export default class Slideshow extends Node {
           );
           return true;
         },
+      // Adds images by URL to the end of the selected slideshow.
+      addSlideshowImages:
+        (attrs?: unknown): Command =>
+        (state, dispatch) =>
+          updateSelectedImages(state, dispatch, type, (images) => {
+            const additions = toSlideshowAttrs(attrs).images;
+            return additions.length
+              ? addSlideshowImages(images, additions)
+              : undefined;
+          }),
+      // Removes one image from the selected slideshow.
+      removeSlideshowImage:
+        (attrs?: unknown): Command =>
+        (state, dispatch) =>
+          updateSelectedImages(state, dispatch, type, (images) => {
+            const index = readIndex(attrs, "index");
+            return index === undefined
+              ? undefined
+              : removeSlideshowImage(images, index);
+          }),
+      // Moves one image of the selected slideshow to a new position.
+      moveSlideshowImage:
+        (attrs?: unknown): Command =>
+        (state, dispatch) =>
+          updateSelectedImages(state, dispatch, type, (images) => {
+            const from = readIndex(attrs, "from");
+            const to = readIndex(attrs, "to");
+            return from === undefined || to === undefined
+              ? undefined
+              : moveSlideshowImage(images, from, to);
+          }),
     };
   }
 
@@ -217,6 +257,12 @@ export default class Slideshow extends Node {
               : DEFAULT_SLIDESHOW_INTERVAL;
 
           const items: MenuItem[] = [
+            {
+              name: "uploadSlideshowImages",
+              tooltip: t("Add images"),
+              icon: <PlusIcon />,
+              visible: !!this.editor?.props.uploadFile,
+            },
             {
               name: "slideshowInterval",
               tooltip: t("Transition speed"),
@@ -260,4 +306,88 @@ export default class Slideshow extends Node {
       getAttrs: (tok: Token) => toSlideshowAttrs(tok.meta),
     };
   }
+
+  /**
+   * Opens a file picker and uploads the chosen images, either into a new
+   * slideshow at the selection or to the end of an existing slideshow.
+   *
+   * @param getTarget returns the position of the slideshow to add to once
+   * files are chosen, or undefined if it is gone. Omit to insert a new one.
+   * @returns true if uploading is supported and the picker was opened.
+   */
+  private chooseImages(getTarget?: () => number | undefined): boolean {
+    const {
+      uploadFile,
+      onFileUploadStart,
+      onFileUploadStop,
+      onFileUploadProgress,
+    } = this.editor.props;
+    if (!uploadFile) {
+      return false;
+    }
+
+    const inputElement = document.createElement("input");
+    inputElement.type = "file";
+    inputElement.multiple = true;
+    inputElement.accept = AttachmentValidation.imageContentTypes.join(", ");
+    inputElement.onchange = (event) => {
+      const files = getEventFiles(event);
+      const options = {
+        uploadFile,
+        onFileUploadStart,
+        onFileUploadStop,
+        onFileUploadProgress,
+      };
+      if (!getTarget) {
+        insertSlideshowFiles(this.editor.view, files, options);
+        return;
+      }
+      const pos = getTarget();
+      if (pos !== undefined) {
+        appendSlideshowFiles(this.editor.view, pos, files, options);
+      }
+    };
+    inputElement.click();
+    return true;
+  }
+}
+
+/**
+ * Replaces the image list of the selected slideshow in a single transaction,
+ * so the change is one undoable step, and keeps the slideshow selected.
+ *
+ * @param state the editor state.
+ * @param dispatch the dispatch function, if the command should be applied.
+ * @param type the slideshow node type.
+ * @param update returns the new image list, or undefined if nothing changes.
+ * @returns true if the command applies.
+ */
+function updateSelectedImages(
+  state: EditorState,
+  dispatch: ((tr: Transaction) => void) | undefined,
+  type: NodeType,
+  update: (images: string[]) => string[] | undefined
+): boolean {
+  const { selection } = state;
+  if (!(selection instanceof NodeSelection) || selection.node.type !== type) {
+    return false;
+  }
+  return updateSlideshowImages(selection.from, update)(state, dispatch);
+}
+
+/**
+ * Reads a whole number from untrusted command attributes.
+ *
+ * @param attrs the command attributes.
+ * @param key the attribute to read.
+ * @returns the number, or undefined if it is missing or not a whole number.
+ */
+function readIndex(attrs: unknown, key: string): number | undefined {
+  if (!attrs || typeof attrs !== "object") {
+    return undefined;
+  }
+  const value: unknown = Reflect.get(attrs, key);
+  return typeof value === "number" && Number.isInteger(value)
+    ? value
+    : undefined;
 }
