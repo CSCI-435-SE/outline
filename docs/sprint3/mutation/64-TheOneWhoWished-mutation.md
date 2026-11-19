@@ -13,7 +13,7 @@ Only the code this PR added was mutated: all of `useCredentialScan.ts` (new file
 
 ## Surviving mutants
 
-All six survivors from the before report are listed; there were fewer than 10, so every one is analyzed. All are in lines this PR added.
+All six survivors from the before report are listed. There were fewer than 10, so every one is analyzed. All are in lines this PR added.
 
 | Location (file:line) | Mutation | Equivalent or test gap? | Why |
 |---|---|---|---|
@@ -28,7 +28,7 @@ Testing the fallback hash also covered 8 mutants that had no coverage before. Tw
 
 ## New or strengthened test
 
-Commit: TODO · Test: `app/scenes/Document/hooks/useCredentialScan.test.ts` › fingerprintCredential › without the Web Crypto API (non-secure contexts) › falls back to a non-cryptographic hash when crypto is undefined / when crypto.subtle is undefined · Kills: `useCredentialScan.ts:34` (both survivors)
+Test: `app/scenes/Document/hooks/useCredentialScan.test.ts` › fingerprintCredential › without the Web Crypto API (non-secure contexts) › falls back to a non-cryptographic hash when crypto is undefined / when crypto.subtle is undefined · Kills: `useCredentialScan.ts:34` (both survivors)
 
 Test: `app/scenes/Document/hooks/useCredentialScan.test.ts` › fingerprintCredential › without the Web Crypto API (non-secure contexts) › matches the reference cyrb53 hash for `""` / `"a"` / the AWS test key · Kills: `useCredentialScan.ts:47` and `useCredentialScan.ts:56`
 
@@ -38,7 +38,8 @@ Test: `app/scenes/Document/hooks/useCredentialScan.test.ts` › fingerprintCrede
    The tests only covered the environment they happen to run in. Vitest's jsdom always has Web Crypto, so the fallback hash, which every self-hosted instance served over plain HTTP would use, had no tests at all. If it had returned colliding fingerprints, dismissing one credential would have silenced warnings for every other credential in the document, and nothing would have failed. The storage tests covered the happy path but not malformed array contents or re-dismissing an old fingerprint near the cap. The no-coverage count (83 mutants, nearly all in the React hook) shows the larger gap: the debounce, remote-edit filtering, flush on "Done editing" and toast logic are only checked manually.
 
 2. **Did any surviving mutant point to an assertion whose expected value was not based on the requirements? Explain.**
-   No. The survivors came from missing assertions, not wrong ones. The closest case was the fallback hash: the first new tests checked only properties (format, stable, distinct), so mutants that changed the exact value still survived. To kill them, the known-answer tests had to pin exact values, and copying them from the current code's output would have made the expected values come from the implementation instead of a requirement. Instead, the values were checked against the reference cyrb53 implementation (github.com/bryc/code, `jshash/experimental/cyrb53.js`), and the requirement they protect is that fingerprints stay the same across releases so that saved dismissals keep working. The existing SHA-256 test's `/^[0-9a-f]{64}$/` check is an implementation detail rather than a requirement, but no survivor pointed at it.
+   The survivors came from missing assertions, not wrong ones. The closest case was the fallback hash: the first new tests checked only properties (format, stable, distinct), so mutants that changed the exact value still survived. To kill them, the known-answer tests had to pin exact values, and copying them from the current code's output would have made the expected values come from the implementation instead of a requirement. Instead, the values were checked against the reference cyrb53 implementation (cited in the test file's comment), and the requirement they protect is that fingerprints stay the same across releases so that saved dismissals keep working. The existing SHA-256 test's `/^[0-9a-f]{64}$/` check is an implementation detail rather than a requirement, but no survivor pointed at it.
 
 3. **If you used AI to configure the tool, analyze survivors, or write tests, what did it produce and what did you verify or correct? If AI was not used, write "N/A."**
-   TODO
+   
+I had Claude configure and run StrykerJS on my personal machine and generate a report of what survived. I also pushed the configuration to main because it took a long time and I wanted my team to avoid having to do it all themselves (they would wait until the last minute). I then looked at where these tests were and asked the AI about tests I thought should be added to kill the survivors. After adding these tests, I ran StrykerJS again and generated the after report.
