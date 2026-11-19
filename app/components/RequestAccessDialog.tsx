@@ -19,10 +19,21 @@ function RequestAccessDialog({ documentId, onRequested }: Props) {
   const [reason, setReason] = React.useState("");
 
   const handleSubmit = async () => {
-    await client.post("/accessRequests.create", {
-      documentId,
-      reason: reason.trim() || undefined,
-    });
+    try {
+      await client.post("/accessRequests.create", {
+        documentId,
+        reason: reason.trim() || undefined,
+      });
+    } catch (err) {
+      // The request may already be pending, e.g. sent from another tab, in
+      // which case the outcome the user wanted has already happened.
+      const pending = await client
+        .post("/accessRequests.info", { documentId })
+        .catch(() => undefined);
+      if (pending?.data?.status !== "pending") {
+        throw err;
+      }
+    }
     onRequested();
     toast.success(t("Access request sent"));
   };

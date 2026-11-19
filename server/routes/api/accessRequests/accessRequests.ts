@@ -1,6 +1,7 @@
 import fractionalIndex from "fractional-index";
 import Router from "koa-router";
 import { Sequelize } from "sequelize";
+import { DocumentPermission } from "@shared/types";
 import auth from "@server/middlewares/authentication";
 import { rateLimiter } from "@server/middlewares/rateLimiter";
 import { transaction } from "@server/middlewares/transaction";
@@ -11,6 +12,7 @@ import { authorize, can } from "@server/policies";
 import { presentAccessRequest, presentPolicies } from "@server/presenters";
 import type { APIContext } from "@server/types";
 import { RateLimiterStrategy } from "@server/utils/RateLimiter";
+import { DocumentPermissionPriority } from "@server/utils/permissions";
 import * as T from "./schema";
 import { InvalidRequestError, NotFoundError } from "@server/errors";
 
@@ -127,10 +129,21 @@ router.post(
     });
 
     if (membership) {
-      membership.permission = permission;
-      // disconnect from the source if the permission is manually updated
-      membership.sourceId = null;
-      await membership.saveWithCtx(ctx);
+      // Access may have been granted separately while the request was pending,
+      // so only ever raise the existing permission, never lower it.
+      const currentPermission = Object.values(DocumentPermission).find(
+        (value) => value === membership.permission
+      );
+      if (
+        !currentPermission ||
+        DocumentPermissionPriority[permission] >
+          DocumentPermissionPriority[currentPermission]
+      ) {
+        membership.permission = permission;
+        // disconnect from the source if the permission is manually updated
+        membership.sourceId = null;
+        await membership.saveWithCtx(ctx);
+      }
     } else {
       const [firstMembership] = await UserMembership.findAll({
         where: {

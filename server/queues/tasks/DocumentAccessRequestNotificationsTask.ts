@@ -15,6 +15,7 @@ import {
   AccessRequest,
 } from "@server/models";
 import { AccessRequestStatus } from "@server/models/AccessRequest";
+import { can } from "@server/policies";
 import type { AccessRequestEvent } from "@server/types";
 import { BaseTask, TaskPriority } from "./base/BaseTask";
 
@@ -50,7 +51,7 @@ export default class DocumentAccessRequestNotificationsTask extends BaseTask<Acc
 
     const recipients = uniqBy(
       [
-        ...(await this.findWorkspaceAdmins(document.teamId)),
+        ...(await this.findWorkspaceAdmins(document)),
         ...(await this.findDocumentManagers(document)),
       ],
       "id"
@@ -93,19 +94,32 @@ export default class DocumentAccessRequestNotificationsTask extends BaseTask<Acc
   }
 
   /**
-   * Find the workspace admins, who are always notified of access requests.
+   * Find the workspace admins who can grant access to the document. Admins
+   * who cannot manage it, e.g. in a private collection they are not a member
+   * of, could not approve the request, so they are not notified.
    *
-   * @param teamId - the team to find admins for.
-   * @returns list of active workspace admins.
+   * @param document - the document access was requested to.
+   * @returns list of active workspace admins who can manage the document.
    */
-  private async findWorkspaceAdmins(teamId: string): Promise<User[]> {
-    return User.findAll({
+  private async findWorkspaceAdmins(document: Document): Promise<User[]> {
+    const admins = await User.findAll({
       where: {
-        teamId,
+        teamId: document.teamId,
         role: UserRole.Admin,
         suspendedAt: null,
       },
     });
+
+    const canManage = await Promise.all(
+      admins.map(async (admin) => {
+        const scopedDocument = await Document.findByPk(document.id, {
+          userId: admin.id,
+        });
+        return !!scopedDocument && can(admin, "manageUsers", scopedDocument);
+      })
+    );
+
+    return admins.filter((_admin, index) => canManage[index]);
   }
 
   /**

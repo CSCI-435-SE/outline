@@ -333,6 +333,53 @@ describe("DocumentAccessRequestNotificationsTask", () => {
       );
     });
 
+    it("should not notify workspace admins who cannot manage the document", async () => {
+      const spy = vi.spyOn(Notification, "create");
+      const team = await buildTeam();
+      const workspaceAdmin = await buildAdmin({ teamId: team.id });
+      const collectionAdmin = await buildUser({ teamId: team.id });
+      const actor = await buildUser({ teamId: team.id });
+
+      // A private collection the workspace admin is not a member of, so they
+      // cannot open the document or approve the request.
+      const collection = await buildCollection({
+        teamId: team.id,
+        userId: collectionAdmin.id,
+        permission: null,
+      });
+      const document = await buildDocument({
+        teamId: team.id,
+        collectionId: collection.id,
+      });
+
+      const accessRequest = await AccessRequest.create({
+        documentId: document.id,
+        userId: actor.id,
+        teamId: team.id,
+      });
+
+      const task = new DocumentAccessRequestNotificationsTask();
+      await task.perform({
+        name: "access_requests.create",
+        modelId: accessRequest.id,
+        documentId: document.id,
+        teamId: team.id,
+        actorId: actor.id,
+        ip,
+      });
+
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: collectionAdmin.id,
+        })
+      );
+      expect(spy).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: workspaceAdmin.id,
+        })
+      );
+    });
+
     it("should notify a workspace admin who is also a document admin once", async () => {
       const spy = vi.spyOn(Notification, "create");
       const team = await buildTeam();
