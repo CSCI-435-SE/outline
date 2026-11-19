@@ -18,6 +18,7 @@ import ReactionCreatedNotificationsTask from "../tasks/ReactionCreatedNotificati
 import ReactionRemovedNotificationsTask from "../tasks/ReactionRemovedNotificationsTask";
 import DocumentAccessRequestNotificationsTask from "../tasks/DocumentAccessRequestNotificationsTask";
 import DocumentAddGroupNotificationsTask from "../tasks/DocumentAddGroupNotificationsTask";
+import DocumentCredentialNotificationsTask from "../tasks/DocumentCredentialNotificationsTask";
 import DocumentAddUserNotificationsTask from "../tasks/DocumentAddUserNotificationsTask";
 import DocumentPublishedNotificationsTask from "../tasks/DocumentPublishedNotificationsTask";
 import RevisionCreatedNotificationsTask from "../tasks/RevisionCreatedNotificationsTask";
@@ -97,6 +98,7 @@ export default class NotificationsProcessor extends BaseProcessor {
   async revisionCreated(event: RevisionEvent) {
     await new RevisionCreatedNotificationsTask().schedule(event);
     await new ShareSubscriptionNotificationsTask().schedule(event);
+    await new DocumentCredentialNotificationsTask().schedule(event);
   }
 
   async collectionCreated(event: CollectionEvent) {

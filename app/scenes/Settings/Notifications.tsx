@@ -15,6 +15,7 @@ import {
   StarredIcon,
   UserIcon,
   GroupIcon,
+  KeyIcon,
 } from "outline-icons";
 import * as React from "react";
 import { useTranslation, Trans } from "react-i18next";
@@ -137,6 +138,15 @@ function Notifications() {
       title: t("Document access requested"),
       description: t(
         "Receive a notification when a user requests access to a document you manage"
+      ),
+    },
+    {
+      visible: user.isAdmin,
+      event: NotificationEventType.CredentialDetected,
+      icon: <KeyIcon />,
+      title: t("Credential detected"),
+      description: t(
+        "Receive a notification when a document is saved containing a potential credential"
       ),
     },
     {
