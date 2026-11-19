@@ -2,7 +2,7 @@ import { addDays, differenceInDays } from "date-fns";
 import i18n, { t } from "i18next";
 import { capitalize, floor } from "es-toolkit/compat";
 import { action, autorun, comparer, computed, observable, set } from "mobx";
-import { TeamPreference } from "@shared/types";
+import { DocumentReviewStatus, TeamPreference } from "@shared/types";
 import type {
   JSONObject,
   NavigationNode,
@@ -81,6 +81,25 @@ export default class Document extends ArchivableModel implements Searchable {
    */
   @observable
   reviewedById: string | null | undefined;
+
+  /**
+   * Where the document is in the review workflow. Only present when the team
+   * has the review workflow enabled.
+   */
+  @observable
+  reviewStatus: DocumentReviewStatus | null | undefined;
+
+  /**
+   * The id of the user assigned to review the document.
+   */
+  @observable
+  reviewerId: string | null | undefined;
+
+  /**
+   * The id of the user who requested the review.
+   */
+  @observable
+  reviewRequestedById: string | null | undefined;
 
   /**
    * An optional explanation left by the user who archived the document.
@@ -354,6 +373,37 @@ export default class Document extends ArchivableModel implements Searchable {
   }
 
   /**
+   * Whether the team has the review workflow enabled.
+   */
+  @computed
+  get isReviewWorkflowEnabled(): boolean {
+    const team = this.store?.rootStore?.auth?.team;
+    return !!team?.getPreference(TeamPreference.ReviewWorkflow);
+  }
+
+  /**
+   * The review status to show in the interface, null when the document is not
+   * in the review workflow or the workflow is turned off.
+   */
+  @computed
+  get visibleReviewStatus(): DocumentReviewStatus | null {
+    return this.isReviewWorkflowEnabled ? (this.reviewStatus ?? null) : null;
+  }
+
+  /**
+   * Whether the document is waiting on its author to send it back to the same
+   * reviewer, after changes were requested or an approval was lost to an edit.
+   */
+  @computed
+  get canRequestReviewAgain(): boolean {
+    return (
+      !!this.reviewerId &&
+      (this.visibleReviewStatus === DocumentReviewStatus.ChangesRequested ||
+        this.visibleReviewStatus === DocumentReviewStatus.Draft)
+    );
+  }
+
+  /**
    * Whether the document was marked as reviewed after its last edit, so the
    * review is the most recent confirmation that it is accurate.
    */
@@ -531,6 +581,13 @@ export default class Document extends ArchivableModel implements Searchable {
   archive = (reason?: string) => this.store.archive(this, reason);
 
   review = () => this.store.review(this);
+
+  requestReview = (reviewerId: string) =>
+    this.store.requestReview(this, reviewerId);
+
+  approve = () => this.store.approve(this);
+
+  requestChanges = () => this.store.requestChanges(this);
 
   restore = (options?: { revisionId?: string; collectionId?: string }) =>
     this.store.restore(this, options);

@@ -107,6 +107,8 @@ export default async function documentCollaborativeUpdater({
         collaboratorIds,
         editorVersion,
         lastEditedAt: new Date(),
+        // set explicitly as hooks are disabled, see Document.setLastEditedAt.
+        reviewStatus: Document.reviewStatusAfterEdit(document.reviewStatus),
       },
       {
         transaction,

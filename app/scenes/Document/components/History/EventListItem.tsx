@@ -78,7 +78,7 @@ const EventListItem = ({ item }: Props) => {
 
     case "documents.review":
       icon = <DoneIcon />;
-      meta = t("{{userName}} marked as reviewed", opts);
+      meta = t("{{userName}} marked as not stale", opts);
       break;
 
     case "documents.move":
