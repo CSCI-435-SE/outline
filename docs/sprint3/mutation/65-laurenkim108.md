@@ -11,7 +11,7 @@ yarn test:mutation \
 
 The `--mutate` list is every source line PR #128 added: the whole new task file, plus the changed line ranges in the other four files. The before run included only the server test file, because `app/models/Notification.test.ts` did not exist yet.
 
-**Reports:** [before](reports/65-lkim108-before.json) · [after](reports/65-lkim108-after.json)
+**Reports:** [before](reports/65-laurenkim108-before.json) · [after](reports/65-laurenkim108-after.json)
 **Mutation score:** before 56.52% → after 76.09%
 
 | Run | Killed | Survived | No coverage | Ignored (static) |
@@ -55,7 +55,7 @@ Commit: [5ca8bd7](https://github.com/CSCI-435-SE/outline/commit/5ca8bd7f4ddfb938
 - `server/queues/tasks/DocumentCredentialNotificationsTask.test.ts` › "does nothing when the revision no longer exists". **Kills:** Task.ts:19 (`ConditionalExpression`, `BooleanLiteral`, `BlockStatement`).
 - `app/models/Notification.test.ts` (new) › "names the detected credential types" and "does not throw when credential types are missing". **Kills:** all 5 Notification.ts:222–224 mutants.
 
-The [after report](reports/65-lkim108-after.json) shows all of these as Killed.
+The [after report](reports/65-laurenkim108-after.json) shows all of these as Killed.
 
 ## Questions
 
@@ -67,7 +67,7 @@ The [after report](reports/65-lkim108-after.json) shows all of these as Killed.
 
 3. **If you used AI to configure the tool, analyze survivors, or write tests, what did it produce and what did you verify or correct?**
    I used Claude Code (Opus 5.5). It found TheOneWhoWished's existing Stryker setup and reused it. It limited the `--mutate` list to the exact line ranges my PR changed, from `git diff`, and ran the before and after runs. It classified the 20 undetected mutants and wrote the three new tests. What I verified or corrected:
-   - I corrected the report and log file names. AI started with a generic name, and I set it to `65-lkim108`.
+   - I corrected the report and log file names. AI started with a generic name, and I set it to `65-laurenkim108`.
    - I checked the equivalence reasoning for line 78 and line 85 against the code (`difference` from `es-toolkit`, and the pattern names in `credentialPatterns.ts`).
    - I made sure the new tests are based on requirements and on my design decisions, not just written to kill mutants.
    - I confirmed in the after report that each targeted mutant shows as Killed.
