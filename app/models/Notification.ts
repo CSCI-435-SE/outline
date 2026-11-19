@@ -49,6 +49,7 @@ class Notification extends Model {
         NotificationEventType.CreateRevision,
         NotificationEventType.AddUserToDocument,
         NotificationEventType.RequestDocumentAccess,
+        NotificationEventType.CredentialDetected,
       ],
       collections: [
         NotificationEventType.CreateCollection,
@@ -218,6 +219,10 @@ class Notification extends Model {
           return t("requested access to");
         }
         return t("is requesting access to");
+      case NotificationEventType.CredentialDetected:
+        return t("saved a possible {{ credentialTypes }} in", {
+          credentialTypes: this.data.credentialTypes?.join(", "),
+        });
       default:
         return this.event;
     }
@@ -261,6 +266,7 @@ class Notification extends Model {
         return collection ? collectionPath(collection) : "";
       }
       case NotificationEventType.RequestDocumentAccess:
+      case NotificationEventType.CredentialDetected:
       case NotificationEventType.AddUserToDocument:
       case NotificationEventType.GroupMentionedInDocument:
       case NotificationEventType.MentionedInDocument: {

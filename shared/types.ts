@@ -534,6 +534,7 @@ export enum NotificationEventType {
   Features = "emails.features",
   ExportCompleted = "emails.export_completed",
   RequestDocumentAccess = "access_requests.create",
+  CredentialDetected = "documents.credential_detected",
 }
 
 export enum NotificationChannelType {
@@ -544,6 +545,8 @@ export enum NotificationChannelType {
 
 export type NotificationData = {
   emoji?: string;
+  /** Names of credential types detected, never the credential values. */
+  credentialTypes?: string[];
 };
 
 export type NotificationSettings = {
@@ -574,6 +577,7 @@ export const NotificationEventDefaults: Record<NotificationEventType, boolean> =
     [NotificationEventType.AddUserToDocument]: true,
     [NotificationEventType.AddUserToCollection]: true,
     [NotificationEventType.RequestDocumentAccess]: true,
+    [NotificationEventType.CredentialDetected]: true,
   };
 
 export enum UnfurlResourceType {
