@@ -1,0 +1,74 @@
+# Mutation testing: Issue #65 -- Notify admins when a credential is detected in a document
+
+**PR(s):** #128 (feature; this report and its tests are in a separate PR)  **Tool:** StrykerJS 10 with the Vitest runner  **Config:** [stryker.config.mjs](../../../stryker.config.mjs) and [vitest.stryker.config.ts](../../../vitest.stryker.config.ts), set up by TheOneWhoWished and reused unchanged. I narrowed the scope from the command line.  **Command:** Postgres and Redis running (`docker compose up -d postgres redis`), then:
+
+```bash
+STRYKER_VITEST_INCLUDE=server/queues/tasks/DocumentCredentialNotificationsTask.test.ts,app/models/Notification.test.ts \
+yarn test:mutation \
+  --mutate "server/queues/tasks/DocumentCredentialNotificationsTask.ts,server/queues/processors/NotificationsProcessor.ts:101-101,app/models/Notification.ts:222-225,app/scenes/Settings/Notifications.tsx:143-151,shared/types.ts:537-537,shared/types.ts:548-549,shared/types.ts:580-580" \
+  --reporters html,clear-text,progress,json
+```
+
+The `--mutate` list is every source line PR #128 added: the whole new task file, plus the changed line ranges in the other four files. The before run included only the server test file, because `app/models/Notification.test.ts` did not exist yet.
+
+**Reports:** [before](reports/65-laurenkim108-before.json) · [after](reports/65-laurenkim108-after.json)
+**Mutation score:** before 56.52% → after 76.09%
+
+| Run | Killed | Survived | No coverage | Ignored (static) |
+|---|---|---|---|---|
+| Before | 26 | 8 | 12 | 1 |
+| After | 35 | 6 | 5 | 1 |
+
+`NotificationsProcessor.ts:101` produced no mutants, because it is a single `await` statement. The `shared/types.ts` lines are module-level constants, which the shared config skips (`ignoreStatic: true`). That is the 1 ignored mutant.
+
+## Surviving mutants
+
+The before run left 20 mutants undetected: 8 survived and 12 had no coverage. All of them are on lines this PR added, so all 20 are analyzed. File paths are shortened: `Task.ts` is `server/queues/tasks/DocumentCredentialNotificationsTask.ts`, and `Notification.ts` is `app/models/Notification.ts`.
+
+| Location (file:line) | Mutation | Equivalent or test gap? | Why |
+|---|---|---|---|
+| Task.ts:47 | `if (!(await canUserAccessDocument(...)))` → `if (false)` (survived), and its block → `{}` (no coverage) | **Test gap (fixed)** | No test had an admin who can't open the document, so a mutant that notifies everyone, and shows them the titles of private drafts, passed. |
+| Task.ts:19 | `if (!revision)` → `if (false)` (survived), and its block → `{}` (no coverage) | **Test gap (fixed)** | No test ran the task with a revision that no longer exists. With the guard removed, the task throws on `null`. |
+| Notification.ts:222 | `case CredentialDetected:` removed | **Test gap (fixed)** | No test covered this, so the notification could show the raw event name instead of naming the credential type, breaking the second AC. |
+| Notification.ts:223 | message string → `""` | **Test gap (fixed)** | Same: no test checked the text admins see. |
+| Notification.ts:223 | `{ credentialTypes }` → `{}` | **Test gap (fixed)** | The credential type could be dropped from the message, and no test would notice. |
+| Notification.ts:224 | `credentialTypes?.join` → `credentialTypes.join` | **Test gap (fixed)** | It would crash if a notification has no `credentialTypes`, and nothing tested that case. |
+| Notification.ts:224 | `", "` → `""` | **Test gap (fixed)** | The types would run together ("AWS Access Key IDGitHub Token"). |
+| Task.ts:62 | `Logger.debug` category `"task"` → `""` | Equivalent | Only changes debug log output. No requirement covers log text, and the notifications created are identical. |
+| Task.ts:62 | `Logger.debug` message → `""` | Equivalent | Same as above. |
+| Task.ts:62 | `Logger.debug` context `{...}` → `{}` | Equivalent | Same as above. |
+| Task.ts:78 | `if (current.length === 0)` → `if (false)` | Equivalent | When no credential is found, `difference([], previous)` is also `[]`. Skipping the early return only adds one database query and returns the same result. |
+| Task.ts:78 | early-return block → `{}` | Equivalent | Same reason as the row above. |
+| Task.ts:85 | `previous = []` → `["Stryker was here"]` (first revision) | Equivalent | `difference(current, ["Stryker was here"])` equals `current`, because no credential pattern has that name. Only the names in `credentialPatterns` can appear in `current`. |
+| Task.ts:90 | `get options()` body → `{}` | Test gap (not fixed, low risk) | It only sets the queue priority (`Background`). The tests call `perform()` directly and never schedule the task. A wrong priority changes when notifications arrive, not whether they arrive. |
+| Task.ts:91 | `{ priority: Background }` → `{}` | Test gap (not fixed, low risk) | Same as the row above. |
+| Settings/Notifications.tsx:143 | admin-only preference row → `{}` | Test gap (not fixed) | The settings page has no component tests. I checked the toggle by hand: I turned it off and no notification arrived. The opt-out logic itself is covered by "does not notify admins who opted out". |
+| Settings/Notifications.tsx:147 | title `"Credential detected"` → `""` | Test gap (not fixed) | UI text with no component test. Checked by hand. |
+| Settings/Notifications.tsx:149 | description → `""` | Test gap (not fixed) | Same as the row above. |
+
+In the before run, line 19 and line 47 each had more mutants than the two listed here. For example, `ConditionalExpression` → `true` was killed in both runs, because then nobody would be notified. The after report shows every mutant on lines 19 and 47 as killed.
+
+## New or strengthened test
+
+Commit: [5ca8bd7](https://github.com/CSCI-435-SE/outline/commit/5ca8bd7f4ddfb9386468c8db2a27fc89383919c1) · Tests:
+- `server/queues/tasks/DocumentCredentialNotificationsTask.test.ts` › "does not notify admins who cannot access the document". **Kills:** Task.ts:47 (`ConditionalExpression`, `BooleanLiteral`, `BlockStatement`).
+- `server/queues/tasks/DocumentCredentialNotificationsTask.test.ts` › "does nothing when the revision no longer exists". **Kills:** Task.ts:19 (`ConditionalExpression`, `BooleanLiteral`, `BlockStatement`).
+- `app/models/Notification.test.ts` (new) › "names the detected credential types" and "does not throw when credential types are missing". **Kills:** all 5 Notification.ts:222–224 mutants.
+
+The [after report](reports/65-laurenkim108-after.json) shows all of these as Killed.
+
+## Questions
+
+1. **What did the surviving mutants reveal about your tests?**
+   My server tests covered the main path well: who gets notified, opt-out, and repeat saves. But they only tested the cases I was thinking about when I wrote the feature. The access check was a design decision I made so admins aren't shown the titles of documents they can't open, but no test protected it. Someone could delete that check and every test would still pass. The tests also stopped at the server: nothing checked that the notification actually names the credential type, even though that is an acceptance criterion. Most of the remaining survivors are equivalent (log text, and an early return that only skips a query). The ones that are left are UI text and queue priority, which I checked by hand.
+
+2. **Did any surviving mutant point to an assertion whose expected value was not based on the requirements? Explain.**
+   No survivor pointed to a wrong expected value. Every assertion that existed matched an acceptance criterion or a design decision from the PR (for example, the `data.credentialTypes` check maps to "names the credential type"). The gaps were missing assertions, not wrong ones. One thing I noticed: the test "never stores the credential value" is based on a requirement (don't leak the secret), but it didn't kill any mutant, because no mutation operator can make the code store the secret. That's fine. It protects against a future code change rather than a mutant.
+
+3. **If you used AI to configure the tool, analyze survivors, or write tests, what did it produce and what did you verify or correct?**
+   I used Claude Code (Opus 5.5). It found TheOneWhoWished's existing Stryker setup and reused it. It limited the `--mutate` list to the exact line ranges my PR changed, from `git diff`, and ran the before and after runs. It classified the 20 undetected mutants and wrote the three new tests. What I verified or corrected:
+   - I corrected the report and log file names. AI started with a generic name, and I set it to `65-laurenkim108`.
+   - I checked the equivalence reasoning for line 78 and line 85 against the code (`difference` from `es-toolkit`, and the pattern names in `credentialPatterns.ts`).
+   - I made sure the new tests are based on requirements and on my design decisions, not just written to kill mutants.
+   - I confirmed in the after report that each targeted mutant shows as Killed.
+   - I checked the settings toggle by hand, since those mutants are still not covered.
