@@ -28,6 +28,44 @@ describe("fingerprintCredential", () => {
     expect(fp).not.toContain(awsKey1);
     expect(fp).toMatch(/^[0-9a-f]{64}$/);
   });
+
+  describe("without the Web Crypto API (non-secure contexts)", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it.each([
+      ["crypto is undefined", undefined],
+      ["crypto.subtle is undefined", {}],
+    ])(
+      "falls back to a non-cryptographic hash when %s",
+      async (_label, value) => {
+        vi.stubGlobal("crypto", value);
+
+        const fp1 = await fingerprintCredential(awsKey1);
+        expect(fp1).toMatch(/^c53:[0-9a-f]+$/);
+        expect(fp1).not.toContain(awsKey1);
+        expect(await fingerprintCredential(awsKey1)).toEqual(fp1);
+        // Distinct credentials must not collide, or dismissing one would
+        // silence warnings for the other.
+        expect(await fingerprintCredential(awsKey2)).not.toEqual(fp1);
+        expect(await fingerprintCredential(ghToken)).not.toEqual(fp1);
+      }
+    );
+
+    // Known answers from the reference cyrb53 (github.com/bryc/code,
+    // jshash/experimental/cyrb53.js, seed 0), written in hex. Pinning exact
+    // values catches changes to the hash, which would otherwise silently
+    // reset every user's remembered dismissals.
+    it.each([
+      ["", "c53:bdcb81aee8d83"],
+      ["a", "c53:1c2ba782c97901"],
+      [awsKey1, "c53:543aed1eb4f11"],
+    ])("matches the reference cyrb53 hash for %j", async (input, expected) => {
+      vi.stubGlobal("crypto", undefined);
+      expect(await fingerprintCredential(input)).toBe(expected);
+    });
+  });
 });
 
 describe("dismissed fingerprint storage", () => {

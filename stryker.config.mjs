@@ -44,8 +44,9 @@ const config = {
     "docs",
     "reports",
   ],
-  reporters: ["html", "clear-text", "progress"],
+  reporters: ["html", "json", "clear-text", "progress"],
   htmlReporter: { fileName: "reports/mutation/mutation.html" },
+  jsonReporter: { fileName: "reports/mutation/mutation.json" },
   tempDirName: ".stryker-tmp",
   // Static (module-level) mutants rerun every related test file, which is very
   // slow here. Remove this to include them.
