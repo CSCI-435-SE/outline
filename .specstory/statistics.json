@@ -1,0 +1,58 @@
+{
+  "sessions": {
+    "69cd2e16-725f-4d9e-8615-79e684f98f51": {
+      "user_message_count": 24,
+      "agent_message_count": 513,
+      "start_timestamp": "2026-10-06T13:54:03.518Z",
+      "end_timestamp": "2026-10-07T20:20:00.348Z",
+      "markdown_size_bytes": 546779,
+      "provider": "claude",
+      "last_updated": "2026-10-30T02:02:45Z"
+    },
+    "805c2dec-a682-4ade-bd78-c9daba38edac": {
+      "user_message_count": 11,
+      "agent_message_count": 98,
+      "start_timestamp": "2026-10-22T20:40:57.933Z",
+      "end_timestamp": "2026-10-27T21:44:58.134Z",
+      "markdown_size_bytes": 131212,
+      "provider": "claude",
+      "last_updated": "2026-10-30T02:02:45Z"
+    },
+    "8474fe0b-f9f3-456a-95e4-fdf0447c2420": {
+      "user_message_count": 5,
+      "agent_message_count": 89,
+      "start_timestamp": "2026-10-08T01:02:54.282Z",
+      "end_timestamp": "2026-10-08T17:37:17.500Z",
+      "markdown_size_bytes": 149853,
+      "provider": "claude",
+      "last_updated": "2026-10-30T02:02:45Z"
+    },
+    "dc7055b3-29b6-40e2-973e-45987dfa947f": {
+      "user_message_count": 1,
+      "agent_message_count": 43,
+      "start_timestamp": "2026-09-18T00:25:10.843Z",
+      "end_timestamp": "2026-09-18T00:28:32.561Z",
+      "markdown_size_bytes": 43640,
+      "provider": "claude",
+      "last_updated": "2026-10-08T22:27:02Z"
+    },
+    "dfb8e0f5-5c07-4c49-8d68-bb3804f5fb52": {
+      "user_message_count": 6,
+      "agent_message_count": 148,
+      "start_timestamp": "2026-09-17T22:34:38.123Z",
+      "end_timestamp": "2026-09-18T00:01:46.714Z",
+      "markdown_size_bytes": 151598,
+      "provider": "claude",
+      "last_updated": "2026-10-08T22:27:02Z"
+    },
+    "fce59a55-ac05-483b-8e4c-4d9a5b98cab4": {
+      "user_message_count": 1,
+      "agent_message_count": 5,
+      "start_timestamp": "2026-10-06T23:10:50.560Z",
+      "end_timestamp": "2026-10-06T23:10:59.222Z",
+      "markdown_size_bytes": 9307,
+      "provider": "claude",
+      "last_updated": "2026-10-30T02:02:45Z"
+    }
+  }
+}
