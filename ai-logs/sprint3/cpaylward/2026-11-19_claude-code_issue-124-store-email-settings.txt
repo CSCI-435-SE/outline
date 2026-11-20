@@ -1,0 +1,2159 @@
+ ▐▛███▛█   Claude Code v2.1.329
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/software_engineering/outline
+
+
+❯ look at the outline code base and switch into a new branch                    
+  feat/store-email-settings                                                     
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Branching from the latest origin/main rather than your sprint3 docs branch, so
+  the feature branch doesn't pick up the checkin commit.
+
+● Bash(git switch -c feat/store-email-settings origin/main --no-track && git
+      status -sb && git log --oneline -1)
+  ⎿  Switched to a new branch 'feat/store-email-settings'
+     ## feat/store-email-settings
+     ?? .specstory/
+     … +2 lines (ctrl+o to expand)
+  ⎿  Created ai-logs/sprint3/laurenkim108/2026-11-12_claude-code_slideshow-
+     part-3.md +68
+  ⎿  Created ai-logs/sprint4/laurenkim108/2026-11-19_claude-code_credential
+     -admin-notifications.md +49
+  ⎿  Updated app/actions/definitions/documents.tsx +134 -2
+  ⎿  Updated app/components/DocumentMeta.tsx +1 -1
+  ⎿  Created app/components/RequestReviewDialog.tsx +162
+  ⎿  … +60 files changed
+     ai-logs/sprint3/TheOneWhoWished/2026-11-19_claude-code_credential-scan
+     ning.md
+     ai-logs/sprint3/TheOneWhoWished/2026-11-19_claude-code_review-workflow
+     -2.md
+     ai-logs/sprint3/maljassar7sprint3.md
+     +57 more
+  ⎿  (a git step in this command can move the working tree, so these may be
+     its changes, not edits) (ctrl+o to expand)
+
+● Now a quick look at the code related to email settings:
+
+  Searched for 1 pattern, ran 1 shell command (ctrl+o to expand)
+
+● I created feat/store-email-settings from the latest origin/main (1f7c6a8a5, PR
+  #130). I didn't branch from docs/sprint3-checkin-cpaylward because then your
+  sprint3 checkin commit would end up in this feature's PR. That commit is still
+  on its own branch. The untracked .specstory/ folder came along unchanged, and
+  nothing has been modified yet.
+
+  How email settings work now
+
+  All email configuration comes from environment variables. None of it is stored
+  in the database:
+
+  - server/env.ts:397-475 defines SMTP_HOST/SMTP_SERVICE (you can set only one
+    of them), plus SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM_EMAIL,
+    SMTP_REPLY_EMAIL, SMTP_SECURE, SMTP_DISABLE_STARTTLS and SMTP_TLS_CIPHERS.
+    It also works out EMAIL_ENABLED from them.
+  - server/emails/mailer.tsx builds the nodemailer transport from env.*
+    (getOptions() at line 288). The sender and reply-to addresses are set at
+    line 185. In development, if SMTP_USERNAME isn't set, it uses a test
+    account.
+  - server/models/Team.ts:270: emailSigninEnabled returns guestSignin && 
+    env.EMAIL_ENABLED.
+  - app/scenes/Settings/Authentication.tsx:283 is the only place in the UI that
+    mentions email config. It disables the email sign-in toggle and shows "The
+    server must have SMTP configured" when SMTP isn't set.
+
+  Where stored settings would plug in
+
+  If the goal is to save email/SMTP settings in the database instead of env
+  vars, these are the places that would change:
+
+  - Storage: a new model, or a column on Team, added with a migration through
+    yarn sequelize migration:create.
+  - The API route plus its policy and presenter.
+  - A settings page in app/scenes/Settings/.
+  - mailer.tsx, which would read the stored values first and fall back to env.
+
+  The password must not be stored as plain text. AGENTS.md requires this, and
+  some existing models already use encrypted fields you could copy.
+
+  What should "store email settings" cover: the team's SMTP server config, or
+  each user's email notification preferences? Tell me and I'll start on that.
+
+✻ Worked for 30s · done 6:06 PM
+
+❯ Don't change any files. I'm working on a feature store email settings in the  
+  database, with the admin value winning over the environment variable. Answer  
+  these from the code, with file and line for each:                             
+                                                                                
+  Where are the SMTP environment variables defined and validated]?              
+  Where is email actually sent?                                                 
+  Does the mailer build its transport once at startup or on each send?          
+  Is email sent from the API process or from a queue worker?                    
+  Is there an existing place that stores per workspace settings like a JSON?    
+  Is there a model for server wide settings, or only per team data?             
+  How do existing models record who changed something and when?                 
+  Is there an event log pattern?                                                
+                                                                                
+  Flag anything you couldn't find rather than guessing. Stop and wait for me.   
+
+  Searched for 2 patterns, listed 1 directory, ran 5 shell commands (ctrl+o to expand)
+
+● Answers are mostly found. Still checking for a server-wide settings model, how
+  changes are attributed, and the event log.
+
+  Searched for 3 patterns, listed 1 directory, ran 3 shell commands (ctrl+o to expand)
+
+● I didn't change any files. Here are the answers, all on
+  feat/store-email-settings.
+
+  1. Where are the SMTP environment variables defined and validated?
+  - They're defined in server/env.ts:397-476 as fields on the Environment class.
+  - The checks are decorators on those fields:
+    - SMTP_HOST and SMTP_SERVICE can't be used together (@CannotUseWith,
+      server/env.ts:399 and :406).
+    - SMTP_SERVICE must be one of nodemailer's well-known services
+      (@IsInCaseInsensitive, server/env.ts:407).
+    - SMTP_PORT must be a number and can't be combined with SMTP_SERVICE
+      (server/env.ts:423-425).
+    - SMTP_FROM_EMAIL and SMTP_REPLY_EMAIL must be valid mailbox addresses
+      (@IsMailboxAddress, server/env.ts:441 and :449).
+    - SMTP_NAME, SMTP_USERNAME, SMTP_PASSWORD, SMTP_TLS_CIPHERS, SMTP_SECURE and
+      SMTP_DISABLE_STARTTLS have no checks at all.
+  - The checks run once, in the constructor on the next tick
+    (server/env.ts:34-46). If any fail, the process exits with process.exit(1).
+    Settings saved through the database would skip this, so you'll need to
+    validate them separately.
+  - EMAIL_ENABLED is worked out from these values at server/env.ts:410-412. It's
+    marked @Public, so it's sent to the browser; the client reads it at
+    app/scenes/Settings/Authentication.tsx:283.
+
+  2. Where is email actually sent?
+  - Mailer.sendMail calls transporter.sendMail at server/emails/mailer.tsx:183.
+  - That is called from BaseEmail.send() at
+    server/emails/templates/BaseEmail.tsx:164.
+  - Several places read env values while sending, and each would need to check
+    the database setting first:
+    - server/emails/mailer.tsx:185: the reply-to falls back to
+      env.SMTP_REPLY_EMAIL, then env.SMTP_FROM_EMAIL.
+    - server/emails/templates/BaseEmail.tsx:207-216: the sender address comes
+      from env.SMTP_FROM_EMAIL.
+    - server/emails/mailer.tsx:266-288: the Mailgun, SES and Postmark detection
+      reads env.SMTP_HOST and env.SMTP_SERVICE.
+
+  3. Is the transport built once at startup or on each send?
+  Once. It's built in the constructor at server/emails/mailer.tsx:58-61, and the
+  module exports a single shared instance with export default new Mailer() at
+  server/emails/mailer.tsx:347. sendMail just reuses this.transporter
+  (server/emails/mailer.tsx:147). If an admin changes the settings, the
+  transport won't pick them up until it's rebuilt or the process restarts.
+
+  4. Is email sent from the API process or a queue worker?
+  From the queue worker, though the decision to send is made in the API process.
+  - BaseEmail.schedule() (server/emails/templates/BaseEmail.tsx:59-87) runs in
+    the API process. It first checks env.SMTP_FROM_EMAIL and quietly does
+    nothing if it's missing (line 61). Otherwise it adds an EmailTask job to the
+    task queue, with 5 attempts and exponential backoff.
+  - The worker picks the job up through taskQueue().process at
+    server/services/worker.ts:163-164. EmailTask.perform then calls email.send()
+    at server/queues/tasks/EmailTask.ts:20.
+  - By default SERVICES is "collaboration,websockets,worker,web"
+    (server/env.ts:353), so all of these run in one process. Deployments can
+    split them into separate processes, and then each has its own Mailer. A
+    setting change would need to reach the worker processes.
+  - I found no .send() calls that bypass the queue outside tests.
+
+  5. Is there an existing place that stores per-workspace settings as JSON?
+  Yes, Team.preferences, a JSONB column.
+  - The column is at server/models/Team.ts:236-237.
+  - setPreference and getPreference are at server/models/Team.ts:313-337.
+    getPreference falls back to defaults in shared/constants.ts:27.
+  - The keys are the TeamPreference enum (shared/types.ts:430), and the value
+    types are in TeamPreferences (shared/types.ts:464).
+  - The API checks them with the schema at server/routes/api/teams/schema.ts:44,
+    and teamUpdater saves them at server/commands/teamUpdater.ts:69.
+  - Warning: the team presenter sends the whole preferences object to clients
+    (server/presenters/team.ts:22). An SMTP password stored there would leak.
+  - For encrypted columns, there's an @Encrypted decorator (AES-256 with
+    SECRET_KEY) in server/models/decorators/Encrypted.ts. It's already used in
+    server/models/IntegrationAuthentication.ts:47-58.
+
+  6. Is there a model for server-wide settings, or only per-team data?
+  I couldn't find one. No model in server/models/ stores settings for the whole
+  installation, and no migration names suggest one. Everything I found is per
+  team, per user or per integration. Since SMTP config applies to the whole
+  server, you'll have to decide between a new table and storing it per team.
+  "Admin" in this codebase means a team admin.
+
+  7. How do models record who changed something and when?
+  - When: every model gets createdAt and updatedAt from
+    server/models/base/IdModel.ts:23-27. Team also gets deletedAt because it
+    extends ParanoidModel (server/models/Team.ts:78).
+  - Who: there's no general field for this. Some models add their own columns,
+    such as Document.lastModifiedById and createdById
+    (server/models/Document.ts:768 and :775). Team has nothing like that.
+  - Otherwise, the record of who changed what lives in the event log (item 8).
+
+  8. Is there an event log pattern?
+  Yes.
+  - The Event model (server/models/Event.ts) stores name, actorId (line 120),
+    teamId (line 134), ip (line 53) and a changes JSONB column (line 73).
+  - When a model is saved through saveWithCtx or updateWithCtx
+    (server/models/base/Model.ts:61 and :79), an @AfterUpdate hook
+    (server/models/base/Model.ts:225) calls insertEvent
+    (server/models/base/Model.ts:256). It writes an event named like
+    teams.update, with the actor and the before/after changes (changes: 
+    model.previousChangeset, server/models/base/Model.ts:320). This only happens
+    when the context has event.publish set.
+  - Event.createFromContext (server/models/Event.ts:170) is the manual way to
+    log an event.
+  - After the transaction commits, each event is put on globalEventQueue
+    (server/models/Event.ts:91-96).
+  - Columns marked @SkipChangeset are left out of changes.
+  - To check: Event.teamId is typed as a non-null string
+    (server/models/Event.ts:134). I didn't check the migration to see whether
+    the database actually requires it, which matters if the settings are
+    server-wide rather than per team.
+
+  What I didn't check
+  - Whether any frontend code besides server/presenters/team.ts reads
+    preferences in a way that would expose secrets.
+  - Whether any tests mock mailer in a way that a rebuildable transport would
+    break.
+
+  I'll wait for your next instruction.
+
+✻ Sautéed for 1m 18s · done 6:10 PM
+
+※ recap: You're building database-stored email settings that override the SMTP environment variables, and I've answered your eight questions from the code on feat/store-email-settings without changing any files. Next, decide where the settings live: a new server-wide table or per-team storage. (disable recaps in /config)
+
+❯ Here is the diesng that was approved for the chnages I want                   
+                                                                                
+  - Decision: The admin value wins over the environment variable, and each      
+  value reports its source.                                                     
+  - Alternatives considered: The environment variable always wins. Merge the    
+  two by taking whichever was set last.                                         
+  - Rationale: If the environment always won, the admin page would do nothing   
+  on installations that already set variables, which is nearly all of them.     
+  Last set wins cannot be explained to an admin.                                
+  - Consequences: Admins can override a server's configuration, so the page     
+  must show the source and offer a reset. Support questions get easier, because 
+  the source is visible.                                                        
+                                                                                
+  Work one acceptance criterion at a time, for saved settings persist across a  
+  server restart, nvalid values are rejected before saving (an empty host, a    
+  port that is not an integer from 1 to 65535, a from address that is not a     
+  valid email address), and each saved setting records who changed it and when. 
+                                                                                
+  For each:                                                                     
+  Write a failing test first, show it, and run it to prove it fails. Take       
+  expected values from the criteria, not from the code's current output.        
+  pply the smallest change that makes it pass.                                  
+  Show git diff --stat.                                                         
+                                                                                
+  Add a migration with up and down. Boundary tests for the port 0, 1, 65535,    
+  65536, a noninteger like 25.5, and a non-number like abc. Also test an empty  
+  host and a host of only spaces. Don't touch the password, the API, the UI, or 
+  any email sending code. Don't commit. Afterward, explain what you changed     
+  and why, and what could go wrong                                              
+
+● Starting by looking at test setup, an existing simple model, a migration, and
+  the mailbox validator so the new code follows existing patterns.
+
+  Listed 1 directory, ran 4 shell commands (ctrl+o to expand)
+
+● Postgres and Redis aren't running, and the model tests need them. I'll start
+  the local containers the setup guide uses.
+
+  Ran 3 shell commands (ctrl+o to expand)
+
+● The test database is two migrations behind main, so I'll bring it up to date
+  first. Those migrations are already on main; this isn't part of the change.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Test database is current. Now checking how to open a separate DB connection,
+  so the persistence test can mimic a restart.
+
+  Searched for 1 pattern, ran 1 shell command (ctrl+o to expand)
+
+● Writing the first failing test, for persistence across a restart. To mimic a
+  restart, the test reads the rows back over a brand-new database connection
+  that shares no in-memory state with the app.
+
+● Write(server/models/EmailSetting.test.ts)
+  ⎿  Wrote 57 lines to server/models/EmailSetting.test.ts
+       1 import { QueryTypes, Sequelize } from "sequelize";
+       2 import env from "@server/env";
+       3 import { EmailSetting } from "@server/models";
+       4 
+       5 /**
+       6  * Reads the stored email settings through a brand new database
+         connection,
+       7  * which shares no in-memory state with the running app. This is
+          what a server
+       8  * sees after it restarts.
+     … +49 lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● It fails for the expected reason: there is no EmailSetting model yet. Now for
+  the smallest change that passes: a migration, a model, and the index export.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Write(server/migrations/20261119000000-create-email-settings.js)
+  ⎿  Wrote 35 lines to
+     server/migrations/20261119000000-create-email-settings.js
+       1 "use strict";
+       2 
+       3 /** @type {import('sequelize-cli').Migration} */
+       4 module.exports = {
+       5   async up(queryInterface, Sequelize) {
+       6     await queryInterface.createTable("email_settings", {
+       7       id: {
+       8         type: Sequelize.UUID,
+       9         allowNull: false,
+      10         primaryKey: true,
+     … +25 lines (ctrl+o to expand)
+
+● Write(server/models/EmailSetting.ts)
+  ⎿  Wrote 26 lines to server/models/EmailSetting.ts
+       1 import type { InferAttributes, InferCreationAttributes } from "s
+         equelize";
+       2 import { Column, DataType, Table } from "sequelize-typescript";
+       3 import IdModel from "./base/IdModel";
+       4 import Fix from "./decorators/Fix";
+       5 
+       6 /**
+       7  * An email setting saved by an admin. Settings are installation
+         -wide, and a
+       8  * saved value takes precedence over the matching environment va
+     … +19 lines (ctrl+o to expand)
+
+● Bash(printf '\nexport { EmailSetting } from "./EmailSetting";\n' >>
+      server/models/index.ts && tail -3 server/models/index.ts && NODE_ENV=test
+      yarn sequelize db:migra…)
+  ⎿  export { default as AccessRequest } from "./AccessRequest";
+
+     export { EmailSetting } from "./EmailSetting";
+     … +3 lines (ctrl+o to expand)
+  ⎿  Updated server/models/index.ts +2
+      80  export { default as UserPasskey } from "./UserPasskey";
+      81 
+      82  export { default as AccessRequest } from "./AccessRequest";
+      83 +                                                               
+      84 +export { EmailSetting } from "./EmailSetting";                 
+
+● Criterion 1 passes. git diff --stat only lists tracked files, so I'm also
+  listing the new untracked files with their line counts:
+  Ran 1 shell command (ctrl+o to expand)
+
+● Criterion 2 tests are next: each checks that invalid settings are rejected
+  before saving, with port as an integer from 1 to 65535, host non-empty, and
+  the from address a valid email. · summary
+
+● Update(server/models/EmailSetting.test.ts)
+  ⎿  Added 68 lines
+       54        ]);
+       55      });
+       56    });
+       57 +                                                              
+       58 +  describe("validation", () => {                              
+       59 +    it.each([                                                 
+       60 +      ["0", 0],                                               
+       61 +      ["65536", 65536],                                       
+       62 +      ["a non-integer", 25.5],                                
+       63 +      ["a non-number", "abc"],                                
+       64 +    ])("rejects a port of %s before saving", async (_label, va
+          +lue) => {                                                     
+       65 +      await expect(                                           
+       66 +        EmailSetting.create({ key: "port", value })           
+       67 +      ).rejects.toThrow();                                    
+       68 +      expect(await EmailSetting.count()).toEqual(0);          
+       69 +    });                                                       
+       70 +                                                              
+       71 +    it.each([                                                 
+       72 +      ["1", 1],                                               
+       73 +      ["65535", 65535],                                       
+       74 +    ])("accepts a port of %s", async (_label, value) => {     
+       75 +      await EmailSetting.create({ key: "port", value });      
+       76 +      expect(await readAfterRestart()).toEqual([{ key: "port",
+          + value }]);                                                   
+       77 +    });                                                       
+       78 +                                                              
+       79 +    it.each([                                                 
+       80 +      ["an empty host", ""],                                  
+       81 +      ["a host of only spaces", "   "],                       
+       82 +    ])("rejects %s before saving", async (_label, value) => { 
+       83 +      await expect(                                           
+       84 +        EmailSetting.create({ key: "host", value })           
+       85 +      ).rejects.toThrow();                                    
+       86 +      expect(await EmailSetting.count()).toEqual(0);          
+       87 +    });                                                       
+       88 +                                                              
+       89 +    it.each([                                                 
+       90 +      ["no @ sign", "not-an-email"],                          
+       91 +      ["no domain", "noreply@"],                              
+       92 +      ["an empty value", ""],                                 
+       93 +    ])(                                                       
+       94 +      "rejects a from address with %s before saving",         
+       95 +      async (_label, value) => {                              
+       96 +        await expect(                                         
+       97 +          EmailSetting.create({ key: "fromEmail", value })    
+       98 +        ).rejects.toThrow();                                  
+       99 +        expect(await EmailSetting.count()).toEqual(0);        
+      100 +      }                                                       
+      101 +    );                                                        
+      102 +                                                              
+      103 +    it("accepts a valid from address", async () => {          
+      104 +      await EmailSetting.create({                             
+      105 +        key: "fromEmail",                                     
+      106 +        value: "noreply@example.com",                         
+      107 +      });                                                     
+      108 +      expect(await readAfterRestart()).toEqual([              
+      109 +        { key: "fromEmail", value: "noreply@example.com" },   
+      110 +      ]);                                                     
+      111 +    });                                                       
+      112 +                                                              
+      113 +    it("keeps the saved value when an update is invalid", asyn
+          +c () => {                                                     
+      114 +      const setting = await EmailSetting.create({             
+      115 +        key: "host",                                          
+      116 +        value: "smtp.example.com",                            
+      117 +      });                                                     
+      118 +                                                              
+      119 +      await expect(setting.update({ value: "   " })).rejects.t
+          +oThrow();                                                     
+      120 +      expect(await readAfterRestart()).toEqual([              
+      121 +        { key: "host", value: "smtp.example.com" },           
+      122 +      ]);                                                     
+      123 +    });                                                       
+      124 +  });                                                         
+      125  });
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● All 10 rejection tests fail because invalid values are still being saved,
+  while the five valid-value tests pass as they should. I'm adding the check
+  next. · summary
+
+  Searched for 1 pattern, ran 1 shell command (ctrl+o to expand)
+
+● I'll reuse isMailboxAddress, the same check the SMTP_FROM_EMAIL env var uses,
+  so a saved from address follows the same rules as the env var it overrides.
+
+● Update(server/models/EmailSetting.ts)
+  ⎿  Added 12 lines, removed 1 line
+      1  import type { InferAttributes, InferCreationAttributes } from "s
+         equelize";
+      2  import { Column, DataType, Table } from "sequelize-typescript";
+      3 +import { isMailboxAddress } from "@server/utils/validators";    
+      4  import IdModel from "./base/IdModel";
+      5  import Fix from "./decorators/Fix";
+      6 
+     ...
+       8   * An email setting saved by an admin. Settings are installatio
+          n-wide, and a
+       9   * saved value takes precedence over the matching environment v
+          ariable.
+      10   */
+      10 -@Table({ tableName: "email_settings", modelName: "email_setting
+         -" })                                                           
+      11 +@Table({                                                       
+      12 +  tableName: "email_settings",                                 
+      13 +  modelName: "email_setting",                                  
+      14 +  validate: {                                                  
+      15 +    isValidForKey(this: EmailSetting) {                        
+      16 +      if (!isValidEmailSettingValue(this.key, this.value)) {   
+      17 +        throw new Error(`Invalid value for email setting "${thi
+         +s.key}"`);                                                     
+      18 +      }                                                        
+      19 +    },                                                         
+      20 +  },                                                           
+      21 +})                                                             
+      22  @Fix
+      23  export class EmailSetting extends IdModel<
+      24    InferAttributes<EmailSetting>,
+
+● Update(server/models/EmailSetting.ts)
+  ⎿  Added 25 lines
+      35 
+      36  /** The email settings that an admin can save. */
+      37  export type EmailSettingKey = "host" | "port" | "fromEmail";
+      38 +                                                               
+      39 +/**                                                            
+      40 + * Checks whether a value is acceptable for the given email set
+         +ting.                                                          
+      41 + *                                                             
+      42 + * @param key the name of the setting.                         
+      43 + * @param value the value to check.                            
+      44 + * @returns true if the value can be saved, false otherwise.   
+      45 + */                                                            
+      46 +function isValidEmailSettingValue(key: EmailSettingKey, value: 
+         +unknown) {                                                     
+      47 +  switch (key) {                                               
+      48 +    case "host":                                               
+      49 +      return typeof value === "string" && value.trim() !== ""; 
+      50 +    case "port":                                               
+      51 +      return (                                                 
+      52 +        typeof value === "number" &&                           
+      53 +        Number.isInteger(value) &&                             
+      54 +        value >= 1 &&                                          
+      55 +        value <= 65535                                         
+      56 +      );                                                       
+      57 +    case "fromEmail":                                          
+      58 +      return typeof value === "string" && isMailboxAddress(valu
+         +e);                                                            
+      59 +    default:                                                   
+      60 +      return false;                                            
+      61 +  }                                                            
+      62 +}                                                              
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● All 15 tests pass. I'll make the rejection check stricter, asserting a
+  Sequelize ValidationError so that unrelated database errors can't satisfy it. 
+  · summary
+
+● Bash(sed -i 's/rejects\.toThrow();/rejects.toBeInstanceOf(ValidationError);/;
+      s/^import { QueryTypes, Sequelize } from "sequelize";/import { QueryTypes,
+      Sequelize, V…)
+  ⎿  4
+           Tests  15 passed (15)
+      server/models/index.ts | 2 ++
+     … +5 lines (ctrl+o to expand)
+  ⎿  Updated server/models/EmailSetting.test.ts +5 -5
+      1 -import { QueryTypes, Sequelize } from "sequelize";              
+      1 +import { QueryTypes, Sequelize, ValidationError } from "sequeliz
+        +e";                                                             
+      2  import env from "@server/env";
+      3  import { EmailSetting } from "@server/models";
+      4 
+     ...
+      64      ])("rejects a port of %s before saving", async (_label, val
+          ue) => {
+      65        await expect(
+      66          EmailSetting.create({ key: "port", value })
+      67 -      ).rejects.toThrow();                                     
+      67 +      ).rejects.toBeInstanceOf(ValidationError);               
+      68        expect(await EmailSetting.count()).toEqual(0);
+      69      });
+      70 
+     ...
+      82      ])("rejects %s before saving", async (_label, value) => {
+      83        await expect(
+      84          EmailSetting.create({ key: "host", value })
+      85 -      ).rejects.toThrow();                                     
+      85 +      ).rejects.toBeInstanceOf(ValidationError);               
+      86        expect(await EmailSetting.count()).toEqual(0);
+      87      });
+      88 
+     ...
+       95        async (_label, value) => {
+       96          await expect(
+       97            EmailSetting.create({ key: "fromEmail", value })
+       98 -        ).rejects.toThrow();                                  
+       98 +        ).rejects.toBeInstanceOf(ValidationError);            
+       99          expect(await EmailSetting.count()).toEqual(0);
+      100        }
+      101      );
+     ...
+      116          value: "smtp.example.com",
+      117        });
+      118 
+      119 -      await expect(setting.update({ value: "   " })).rejects.t
+          -oThrow();                                                     
+      119 +      await expect(setting.update({ value: "   " })).rejects.t
+          +oBeInstanceOf(ValidationError);                               
+      120        expect(await readAfterRestart()).toEqual([
+      121          { key: "host", value: "smtp.example.com" },
+      122        ]);
+
+● Criterion 2 is passing, so I'm moving to criterion 3, which requires saved
+  settings to record the user and time; I'm writing its tests first, and the
+  earlier tests now need an admin user. · summary
+
+  Read 1 file (ctrl+o to expand)
+
+● Rewriting the whole test file. The earlier tests keep the same assertions and
+  now pass updatedById; the new audit block is at the bottom.
+
+● Write(server/models/EmailSetting.test.ts)
+  ⎿  Added 100 lines, removed 7 lines
+      1  import { QueryTypes, Sequelize, ValidationError } from "sequeliz
+         e";
+      2  import env from "@server/env";
+      3 +import type { User } from "@server/models";                     
+      4  import { EmailSetting } from "@server/models";
+      5 +import { buildAdmin } from "@server/test/factories";            
+      6 
+      7  /**
+      8   * Reads the stored email settings through a brand new database
+         connection,
+     ...
+      23    }
+      24  }
+      25 
+      26 +/**                                                            
+      27 + * Reads who last changed each stored email setting, and when, 
+         +through a brand                                                
+      28 + * new database connection.                                    
+      29 + *                                                             
+      30 + * @returns the stored rows, ordered by key.                   
+      31 + */                                                            
+      32 +async function readAuditAfterRestart() {                       
+      33 +  const fresh = new Sequelize(env.DATABASE_URL ?? "", { logging
+         +: false });                                                    
+      34 +  try {                                                        
+      35 +    return await fresh.query<{                                 
+      36 +      key: string;                                             
+      37 +      updatedById: string | null;                              
+      38 +      updatedAt: Date;                                         
+      39 +    }>(                                                        
+      40 +      `SELECT key, "updatedById", "updatedAt" FROM email_settin
+         +gs ORDER BY key`,                                              
+      41 +      { type: QueryTypes.SELECT }                              
+      42 +    );                                                         
+      43 +  } finally {                                                  
+      44 +    await fresh.close();                                       
+      45 +  }                                                            
+      46 +}                                                              
+      47 +                                                               
+      48  describe("EmailSetting", () => {
+      49 +  let admin: User;                                             
+      50 +                                                               
+      51    beforeEach(async () => {
+      52      await EmailSetting.destroy({ where: {}, truncate: true });
+      53 +    admin = await buildAdmin();                                
+      54    });
+      55 
+      56    describe("persistence", () => {
+      57      it("keeps saved settings after a server restart", async ()
+          => {
+      31 -      await EmailSetting.create({ key: "host", value: "smtp.exa
+         -mple.com" });                                                  
+      32 -      await EmailSetting.create({ key: "port", value: 587 });  
+      58        await EmailSetting.create({
+      59 +        key: "host",                                           
+      60 +        value: "smtp.example.com",                             
+      61 +        updatedById: admin.id,                                 
+      62 +      });                                                      
+      63 +      await EmailSetting.create({                              
+      64 +        key: "port",                                           
+      65 +        value: 587,                                            
+      66 +        updatedById: admin.id,                                 
+      67 +      });                                                      
+      68 +      await EmailSetting.create({                              
+      69          key: "fromEmail",
+      70          value: "noreply@example.com",
+      71 +        updatedById: admin.id,                                 
+      72        });
+      73 
+      74        expect(await readAfterRestart()).toEqual([
+     ...
+      82        const setting = await EmailSetting.create({
+      83          key: "host",
+      84          value: "smtp.old.example.com",
+      85 +        updatedById: admin.id,                                 
+      86        });
+      87        await setting.update({ value: "smtp.new.example.com" });
+      88 
+     ...
+      100        ["a non-number", "abc"],
+      101      ])("rejects a port of %s before saving", async (_label, va
+           lue) => {
+      102        await expect(
+       66 -        EmailSetting.create({ key: "port", value })           
+      103 +        EmailSetting.create({ key: "port", value, updatedById:
+          + admin.id })                                                  
+      104        ).rejects.toBeInstanceOf(ValidationError);
+      105        expect(await EmailSetting.count()).toEqual(0);
+      106      });
+     ...
+      109        ["1", 1],
+      110        ["65535", 65535],
+      111      ])("accepts a port of %s", async (_label, value) => {
+       75 -      await EmailSetting.create({ key: "port", value });      
+      112 +      await EmailSetting.create({ key: "port", value, updatedB
+          +yId: admin.id });                                             
+      113        expect(await readAfterRestart()).toEqual([{ key: "port",
+            value }]);
+      114      });
+      115 
+     ...
+      118        ["a host of only spaces", "   "],
+      119      ])("rejects %s before saving", async (_label, value) => {
+      120        await expect(
+       84 -        EmailSetting.create({ key: "host", value })           
+      121 +        EmailSetting.create({ key: "host", value, updatedById:
+          + admin.id })                                                  
+      122        ).rejects.toBeInstanceOf(ValidationError);
+      123        expect(await EmailSetting.count()).toEqual(0);
+      124      });
+     ...
+      131        "rejects a from address with %s before saving",
+      132        async (_label, value) => {
+      133          await expect(
+       97 -          EmailSetting.create({ key: "fromEmail", value })    
+      134 +          EmailSetting.create({                               
+      135 +            key: "fromEmail",                                 
+      136 +            value,                                            
+      137 +            updatedById: admin.id,                            
+      138 +          })                                                  
+      139          ).rejects.toBeInstanceOf(ValidationError);
+      140          expect(await EmailSetting.count()).toEqual(0);
+      141        }
+     ...
+      145        await EmailSetting.create({
+      146          key: "fromEmail",
+      147          value: "noreply@example.com",
+      148 +        updatedById: admin.id,                                
+      149        });
+      150        expect(await readAfterRestart()).toEqual([
+      151          { key: "fromEmail", value: "noreply@example.com" },
+     ...
+      156        const setting = await EmailSetting.create({
+      157          key: "host",
+      158          value: "smtp.example.com",
+      159 +        updatedById: admin.id,                                
+      160        });
+      161 
+      119 -      await expect(setting.update({ value: "   " })).rejects.t
+          -oBeInstanceOf(ValidationError);                               
+      162 +      await expect(setting.update({ value: "   " })).rejects.t
+          +oBeInstanceOf(                                                
+      163 +        ValidationError                                       
+      164 +      );                                                      
+      165        expect(await readAfterRestart()).toEqual([
+      166          { key: "host", value: "smtp.example.com" },
+      167        ]);
+      168      });
+      169    });
+      170 +                                                              
+      171 +  describe("audit", () => {                                   
+      172 +    afterEach(() => {                                         
+      173 +      vi.useRealTimers();                                     
+      174 +    });                                                       
+      175 +                                                              
+      176 +    it("records who saved a setting and when", async () => {  
+      177 +      vi.useFakeTimers({ toFake: ["Date"] });                 
+      178 +      const savedAt = new Date("2026-03-01T10:00:00.000Z");   
+      179 +      vi.setSystemTime(savedAt);                              
+      180 +                                                              
+      181 +      await EmailSetting.create({                             
+      182 +        key: "host",                                          
+      183 +        value: "smtp.example.com",                            
+      184 +        updatedById: admin.id,                                
+      185 +      });                                                     
+      186 +                                                              
+      187 +      expect(await readAuditAfterRestart()).toEqual([         
+      188 +        { key: "host", updatedById: admin.id, updatedAt: saved
+          +At },                                                         
+      189 +      ]);                                                     
+      190 +    });                                                       
+      191 +                                                              
+      192 +    it("records the latest person to change a setting and when
+          +", async () => {                                              
+      193 +      const otherAdmin = await buildAdmin();                  
+      194 +      vi.useFakeTimers({ toFake: ["Date"] });                 
+      195 +      vi.setSystemTime(new Date("2026-03-01T10:00:00.000Z")); 
+      196 +      const setting = await EmailSetting.create({             
+      197 +        key: "port",                                          
+      198 +        value: 25,                                            
+      199 +        updatedById: admin.id,                                
+      200 +      });                                                     
+      201 +                                                              
+      202 +      const changedAt = new Date("2026-03-02T15:30:00.000Z"); 
+      203 +      vi.setSystemTime(changedAt);                            
+      204 +      await setting.update({ value: 587, updatedById: otherAdm
+          +in.id });                                                     
+      205 +                                                              
+      206 +      expect(await readAuditAfterRestart()).toEqual([         
+      207 +        { key: "port", updatedById: otherAdmin.id, updatedAt: 
+          +changedAt },                                                  
+      208 +      ]);                                                     
+      209 +    });                                                       
+      210 +                                                              
+      211 +    it("rejects a setting saved without recording who changed 
+          +it", async () => {                                            
+      212 +      await expect(                                           
+      213 +        EmailSetting.create({ key: "host", value: "smtp.exampl
+          +e.com" })                                                     
+      214 +      ).rejects.toBeInstanceOf(ValidationError);              
+      215 +      expect(await EmailSetting.count()).toEqual(0);          
+      216 +    });                                                       
+      217 +  });                                                         
+      218  });
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● All three tests fail as expected, since the updatedById column is missing and
+  a save without a user succeeds. The migration isn't shared yet, so I'll add
+  the column to it directly and roll it back on the test database first. 
+  · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● down removed the table cleanly (to_regclass came back empty). Adding the
+  column:
+
+● Update(server/migrations/20261119000000-create-email-settings.js)
+  ⎿  Added 10 lines
+      18          type: Sequelize.JSONB,
+      19          allowNull: false,
+      20        },
+      21 +      // Nullable so that hard-deleting a user keeps the settin
+         +g and only loses                                               
+      22 +      // the attribution; the model requires a user on every sa
+         +ve.                                                            
+      23 +      updatedById: {                                           
+      24 +        type: Sequelize.UUID,                                  
+      25 +        allowNull: true,                                       
+      26 +        references: {                                          
+      27 +          model: "users",                                      
+      28 +        },                                                     
+      29 +        onDelete: "SET NULL",                                  
+      30 +      },                                                       
+      31        createdAt: {
+      32          type: Sequelize.DATE,
+      33          allowNull: false,
+
+● Update(server/models/EmailSetting.ts)
+  ⎿  Added 12 lines
+      31    /** The saved value of the setting. */
+      32    @Column(DataType.JSONB)
+      33    value: string | number;
+      34 +                                                               
+      35 +  // associations                                              
+      36 +                                                               
+      37 +  /** The user who last changed the setting. */                
+      38 +  @BelongsTo(() => User, "updatedById")                        
+      39 +  updatedBy: User | null;                                      
+      40 +                                                               
+      41 +  /** The ID of the user who last changed the setting; updatedA
+         +t records when. */                                             
+      42 +  @AllowNull(false)                                            
+      43 +  @ForeignKey(() => User)                                      
+      44 +  @Column(DataType.UUID)                                       
+      45 +  updatedById: string | null;                                  
+      46  }
+      47 
+      48  /** The email settings that an admin can save. */
+
+● Update(server/models/EmailSetting.ts)
+  ⎿  Added 9 lines, removed 1 line
+       1  import type { InferAttributes, InferCreationAttributes } from "
+          sequelize";
+       2 -import { Column, DataType, Table } from "sequelize-typescript";
+       2 +import {                                                       
+       3 +  AllowNull,                                                   
+       4 +  BelongsTo,                                                   
+       5 +  Column,                                                      
+       6 +  DataType,                                                    
+       7 +  ForeignKey,                                                  
+       8 +  Table,                                                       
+       9 +} from "sequelize-typescript";                                 
+      10  import { isMailboxAddress } from "@server/utils/validators";
+      11 +import User from "./User";                                     
+      12  import IdModel from "./base/IdModel";
+      13  import Fix from "./decorators/Fix";
+      14 
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● All 18 tests pass. I'm now running the required type, lint and format checks,
+  plus the migration down-and-up and repeated test runs. · summary
+
+  Ran 1 shell command, no result recorded for 1 other call (ctrl+o to expand)
+  ⎿  $ timeout 590 yarn tsc --noEmit 2>&1 | tail -15
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ Implement the resolution layer  on top of the storage, one acceptance         
+  criterion at a time, failing test first, then the smallest change:            
+                                                                                
+  The effective value of each setting is the admin value if one exists,         
+  otherwise the environment variable, and each value reports its source (admin  
+  or environment). Removing an admin value makes that setting fall back to the  
+  environment variable. A stored value that later fails validation is ignored,  
+  the environment value is used, and a warning is logged without the value      
+  itself being logged. On an installation that has never saved a setting, every 
+  value comes from the environment and behavior is unchanged.                   
+                                                                                
+  Also test an environment variable that is unset, and the case where both      
+  exist. Don't touch the password, the API, the UI, or the mailer. Don't        
+  commit.                                                                       
+                                                                                
+  When done, run the changed test files, then type check and lint on the        
+  changed files, and report failures. Show git diff --stat and the full diff,   
+  and for each file tell me what changed, why, and what could go wrong. Stop    
+  and wait for m                                                                
+
+● I'll start with a quick look at Logger.warn's signature, since criterion 3
+  needs a warning that doesn't include the value. The model file is in context
+  already.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● I'm putting the resolution on the EmailSetting model as a static resolve()
+  method, mapping host, port and fromEmail to their SMTP env vars. Tests will
+  cover admin-over-env precedence and the source reported for each value. 
+  · summary
+
+● Update(server/models/EmailSetting.test.ts)
+  ⎿  Added 75 lines
+      215        expect(await EmailSetting.count()).toEqual(0);
+      216      });
+      217    });
+      218 +                                                              
+      219 +  describe("resolve", () => {                                 
+      220 +    const original = {                                        
+      221 +      SMTP_HOST: env.SMTP_HOST,                               
+      222 +      SMTP_PORT: env.SMTP_PORT,                               
+      223 +      SMTP_FROM_EMAIL: env.SMTP_FROM_EMAIL,                   
+      224 +    };                                                        
+      225 +                                                              
+      226 +    beforeEach(() => {                                        
+      227 +      env.SMTP_HOST = "smtp.env.example.com";                 
+      228 +      env.SMTP_PORT = 2525;                                   
+      229 +      env.SMTP_FROM_EMAIL = "env@example.com";                
+      230 +    });                                                       
+      231 +                                                              
+      232 +    afterEach(() => {                                         
+      233 +      env.SMTP_HOST = original.SMTP_HOST;                     
+      234 +      env.SMTP_PORT = original.SMTP_PORT;                     
+      235 +      env.SMTP_FROM_EMAIL = original.SMTP_FROM_EMAIL;         
+      236 +    });                                                       
+      237 +                                                              
+      238 +    it("uses the admin value when both an admin value and an e
+          +nvironment variable exist", async () => {                     
+      239 +      await EmailSetting.create({                             
+      240 +        key: "host",                                          
+      241 +        value: "smtp.admin.example.com",                      
+      242 +        updatedById: admin.id,                                
+      243 +      });                                                     
+      244 +                                                              
+      245 +      const settings = await EmailSetting.resolve();          
+      246 +                                                              
+      247 +      expect(settings.host).toEqual({                         
+      248 +        value: "smtp.admin.example.com",                      
+      249 +        source: "admin",                                      
+      250 +      });                                                     
+      251 +    });                                                       
+      252 +                                                              
+      253 +    it("uses the admin value when the environment variable is 
+          +unset", async () => {                                         
+      254 +      env.SMTP_PORT = undefined;                              
+      255 +      await EmailSetting.create({                             
+      256 +        key: "port",                                          
+      257 +        value: 587,                                           
+      258 +        updatedById: admin.id,                                
+      259 +      });                                                     
+      260 +                                                              
+      261 +      const settings = await EmailSetting.resolve();          
+      262 +                                                              
+      263 +      expect(settings.port).toEqual({ value: 587, source: "adm
+          +in" });                                                       
+      264 +    });                                                       
+      265 +                                                              
+      266 +    it("uses the environment variable when there is no admin v
+          +alue", async () => {                                          
+      267 +      await EmailSetting.create({                             
+      268 +        key: "host",                                          
+      269 +        value: "smtp.admin.example.com",                      
+      270 +        updatedById: admin.id,                                
+      271 +      });                                                     
+      272 +                                                              
+      273 +      const settings = await EmailSetting.resolve();          
+      274 +                                                              
+      275 +      expect(settings.port).toEqual({ value: 2525, source: "en
+          +vironment" });                                                
+      276 +      expect(settings.fromEmail).toEqual({                    
+      277 +        value: "env@example.com",                             
+      278 +        source: "environment",                                
+      279 +      });                                                     
+      280 +    });                                                       
+      281 +                                                              
+      282 +    it("reports an unset value from the environment when neith
+          +er exists", async () => {                                     
+      283 +      env.SMTP_FROM_EMAIL = undefined;                        
+      284 +                                                              
+      285 +      const settings = await EmailSetting.resolve();          
+      286 +                                                              
+      287 +      expect(settings.fromEmail).toEqual({                    
+      288 +        value: undefined,                                     
+      289 +        source: "environment",                                
+      290 +      });                                                     
+      291 +    });                                                       
+      292 +  });                                                         
+      293  });
+  Ran 1 shell command (ctrl+o to expand)
+
+● They fail because resolve doesn't exist yet. Adding the smallest version, with
+  no re-validation yet; that comes with criterion 3:
+
+● Update(server/models/EmailSetting.ts)
+  ⎿  Added 27 lines
+      32    InferAttributes<EmailSetting>,
+      33    Partial<InferCreationAttributes<EmailSetting>>
+      34  > {
+      35 +  /**                                                          
+      36 +   * Works out the effective value of every email setting. An a
+         +dmin value wins                                                
+      37 +   * over the environment variable, and each value reports wher
+         +e it came from.                                                
+      38 +   *                                                           
+      39 +   * @returns the effective value and source of each setting.  
+      40 +   */                                                          
+      41 +  public static async resolve(): Promise<ResolvedEmailSettings>
+         + {                                                             
+      42 +    const stored = new Map(                                    
+      43 +      (await this.findAll()).map((setting) => [setting.key, set
+         +ting.value])                                                   
+      44 +    );                                                         
+      45 +    const fromEnvironment = environmentValues();               
+      46 +                                                               
+      47 +    const resolveKey = (key: EmailSettingKey): ResolvedEmailSet
+         +ting => {                                                      
+      48 +      const value = stored.get(key);                           
+      49 +      if (value === undefined) {                               
+      50 +        return { value: fromEnvironment[key], source: "environm
+         +ent" };                                                        
+      51 +      }                                                        
+      52 +      return { value, source: "admin" };                       
+      53 +    };                                                         
+      54 +                                                               
+      55 +    return {                                                   
+      56 +      host: resolveKey("host"),                                
+      57 +      port: resolveKey("port"),                                
+      58 +      fromEmail: resolveKey("fromEmail"),                      
+      59 +    };                                                         
+      60 +  }                                                            
+      61 +                                                               
+      62    /** The name of the setting, for example "host". */
+      63    @Column(DataType.STRING)
+      64    key: EmailSettingKey;
+
+● Update(server/models/EmailSetting.ts)
+  ⎿  Added 34 lines
+       83  /** The email settings that an admin can save. */
+       84  export type EmailSettingKey = "host" | "port" | "fromEmail";
+       85 
+       86 +/** Where the effective value of an email setting came from. *
+          +/                                                             
+       87 +export type EmailSettingSource = "admin" | "environment";     
+       88 +                                                              
+       89 +/** The effective value of an email setting and where it came 
+          +from. */                                                      
+       90 +export interface ResolvedEmailSetting {                       
+       91 +  /** The effective value, or undefined if neither source sets
+          + it. */                                                       
+       92 +  value: string | number | undefined;                         
+       93 +  /** Whether the value came from an admin or the environment.
+          + */                                                           
+       94 +  source: EmailSettingSource;                                 
+       95 +}                                                             
+       96 +                                                              
+       97 +/** The effective value of every email setting. */            
+       98 +export type ResolvedEmailSettings = Record<                   
+       99 +  EmailSettingKey,                                            
+      100 +  ResolvedEmailSetting                                        
+      101 +>;                                                            
+      102 +                                                              
+      103  /**
+      104 + * Reads the environment variable behind each email setting. R
+          +ead on every call                                             
+      105 + * so that the current environment is always used.            
+      106 + *                                                            
+      107 + * @returns the environment value of each setting.            
+      108 + */                                                           
+      109 +function environmentValues(): Record<                         
+      110 +  EmailSettingKey,                                            
+      111 +  string | number | undefined                                 
+      112 +> {                                                           
+      113 +  return {                                                    
+      114 +    host: env.SMTP_HOST,                                      
+      115 +    port: env.SMTP_PORT,                                      
+      116 +    fromEmail: env.SMTP_FROM_EMAIL,                           
+      117 +  };                                                          
+      118 +}                                                             
+      119 +                                                              
+      120 +/**                                                           
+      121   * Checks whether a value is acceptable for the given email se
+           tting.
+      122   *
+      123   * @param key the name of the setting.
+
+● Update(server/models/EmailSetting.ts)
+  ⎿  Added 1 line
+       7    ForeignKey,
+       8    Table,
+       9  } from "sequelize-typescript";
+      10 +import env from "@server/env";                                 
+      11  import { isMailboxAddress } from "@server/utils/validators";
+      12  import User from "./User";
+      13  import IdModel from "./base/IdModel";
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Criterion 1 passes, 22 of 22.
+
+  Criterion 2: removing an admin value falls back to the environment variable.
+
+● Update(server/models/EmailSetting.test.ts)
+  ⎿  Added 16 lines
+      289          source: "environment",
+      290        });
+      291      });
+      292 +                                                              
+      293 +    it("falls back to the environment variable when the admin 
+          +value is removed", async () => {                              
+      294 +      const setting = await EmailSetting.create({             
+      295 +        key: "host",                                          
+      296 +        value: "smtp.admin.example.com",                      
+      297 +        updatedById: admin.id,                                
+      298 +      });                                                     
+      299 +      expect((await EmailSetting.resolve()).host.source).toEqu
+          +al("admin");                                                  
+      300 +                                                              
+      301 +      await setting.destroy();                                
+      302 +                                                              
+      303 +      expect((await EmailSetting.resolve()).host).toEqual({   
+      304 +        value: "smtp.env.example.com",                        
+      305 +        source: "environment",                                
+      306 +      });                                                     
+      307 +    });                                                       
+      308    });
+      309  });
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The test passes immediately with no code change, so I'll temporarily add a
+  cache to resolve() to confirm it can catch a real regression, then restore the
+  file. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The mutation test failed and the file is restored, so the removal test does
+  guard the fallback. Next I'm checking that invalid stored values are ignored,
+  fall back to the env value, and log a warning without the value. · summary
+
+● Update(server/models/EmailSetting.test.ts)
+  ⎿  Added 53 lines
+      305          source: "environment",
+      306        });
+      307      });
+      308 +                                                              
+      309 +    describe("with a stored value that fails validation", () =
+          +> {                                                           
+      310 +      /**                                                     
+      311 +       * Stores a value directly in the database, skipping mod
+          +el validation, as                                             
+      312 +       * happens when a value was saved before the rules chang
+          +ed.                                                           
+      313 +       *                                                      
+      314 +       * @param key the name of the setting.                  
+      315 +       * @param value the value to store.                     
+      316 +       */                                                     
+      317 +      async function storeWithoutValidation(key: string, value
+          +: unknown) {                                                  
+      318 +        await sequelize.query(                                
+      319 +          `INSERT INTO email_settings (id, key, value, "update
+          +dById", "createdAt", "updatedAt")                             
+      320 +           VALUES (gen_random_uuid(), :key, :value, :updatedBy
+          +Id, now(), now())`,                                           
+      321 +          {                                                   
+      322 +            replacements: {                                   
+      323 +              key,                                            
+      324 +              value: JSON.stringify(value),                   
+      325 +              updatedById: admin.id,                          
+      326 +            },                                                
+      327 +          }                                                   
+      328 +        );                                                    
+      329 +      }                                                       
+      330 +                                                              
+      331 +      afterEach(() => {                                       
+      332 +        vi.restoreAllMocks();                                 
+      333 +      });                                                     
+      334 +                                                              
+      335 +      it("ignores it and uses the environment variable", async
+          + () => {                                                      
+      336 +        await storeWithoutValidation("port", 99999);          
+      337 +        await storeWithoutValidation("fromEmail", "leaked-secr
+          +et-value");                                                   
+      338 +                                                              
+      339 +        const settings = await EmailSetting.resolve();        
+      340 +                                                              
+      341 +        expect(settings.port).toEqual({ value: 2525, source: "
+          +environment" });                                              
+      342 +        expect(settings.fromEmail).toEqual({                  
+      343 +          value: "env@example.com",                           
+      344 +          source: "environment",                              
+      345 +        });                                                   
+      346 +      });                                                     
+      347 +                                                              
+      348 +      it("logs a warning that does not include the value", asy
+          +nc () => {                                                    
+      349 +        const warn = vi.spyOn(Logger, "warn");                
+      350 +        await storeWithoutValidation("port", 99999);          
+      351 +        await storeWithoutValidation("fromEmail", "leaked-secr
+          +et-value");                                                   
+      352 +                                                              
+      353 +        await EmailSetting.resolve();                         
+      354 +                                                              
+      355 +        expect(warn).toHaveBeenCalled();                      
+      356 +        const logged = JSON.stringify(warn.mock.calls);       
+      357 +        expect(logged).not.toContain("99999");                
+      358 +        expect(logged).not.toContain("leaked-secret-value");  
+      359 +      });                                                     
+      360 +    });                                                       
+      361    });
+      362  });
+
+● Update(server/models/EmailSetting.test.ts)
+  ⎿  Added 2 lines
+      1  import { QueryTypes, Sequelize, ValidationError } from "sequeliz
+         e";
+      2  import env from "@server/env";
+      3 +import Logger from "@server/logging/Logger";                    
+      4  import type { User } from "@server/models";
+      5  import { EmailSetting } from "@server/models";
+      6 +import { sequelize } from "@server/storage/database";           
+      7  import { buildAdmin } from "@server/test/factories";
+      8 
+      9  /**
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Both fail as expected: the invalid 99999 comes back as an admin value, and no
+  warning is logged. Now the smallest fix: resolve() re-checks each stored value
+  with the same rules used on save.
+
+● Update(server/models/EmailSetting.ts)
+  ⎿  Added 7 lines
+      50        if (value === undefined) {
+      51          return { value: fromEnvironment[key], source: "environm
+          ent" };
+      52        }
+      53 +      if (!isValidEmailSettingValue(key, value)) {             
+      54 +        // The value is deliberately not logged, it may be sens
+         +itive.                                                         
+      55 +        Logger.warn(                                           
+      56 +          `Ignoring invalid stored email setting "${key}", usin
+         +g the environment value instead`                               
+      57 +        );                                                     
+      58 +        return { value: fromEnvironment[key], source: "environm
+         +ent" };                                                        
+      59 +      }                                                        
+      60        return { value, source: "admin" };
+      61      };
+      62 
+
+● Update(server/models/EmailSetting.ts)
+  ⎿  Added 1 line
+       8    Table,
+       9  } from "sequelize-typescript";
+      10  import env from "@server/env";
+      11 +import Logger from "@server/logging/Logger";                   
+      12  import { isMailboxAddress } from "@server/utils/validators";
+      13  import User from "./User";
+      14  import IdModel from "./base/IdModel";
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Criterion 3 passed, 25 of 25. For criterion 4, I'm checking that with no saved
+  settings, every value matches the env vars, including when they're unset, and
+  that resolve() creates no rows and logs no warnings. · summary
+
+● Update(server/models/EmailSetting.test.ts)
+  ⎿  Added 35 lines
+      360          expect(logged).not.toContain("leaked-secret-value");
+      361        });
+      362      });
+      363 +                                                              
+      364 +    describe("on an installation that has never saved a settin
+          +g", () => {                                                   
+      365 +      afterEach(() => {                                       
+      366 +        vi.restoreAllMocks();                                 
+      367 +      });                                                     
+      368 +                                                              
+      369 +      it("takes every value from the environment", async () =>
+          + {                                                            
+      370 +        expect(await EmailSetting.resolve()).toEqual({        
+      371 +          host: { value: "smtp.env.example.com", source: "envi
+          +ronment" },                                                   
+      372 +          port: { value: 2525, source: "environment" },       
+      373 +          fromEmail: { value: "env@example.com", source: "envi
+          +ronment" },                                                   
+      374 +        });                                                   
+      375 +      });                                                     
+      376 +                                                              
+      377 +      it("takes every value from the environment when none are
+          + set", async () => {                                          
+      378 +        env.SMTP_HOST = undefined;                            
+      379 +        env.SMTP_PORT = undefined;                            
+      380 +        env.SMTP_FROM_EMAIL = undefined;                      
+      381 +                                                              
+      382 +        expect(await EmailSetting.resolve()).toEqual({        
+      383 +          host: { value: undefined, source: "environment" },  
+      384 +          port: { value: undefined, source: "environment" },  
+      385 +          fromEmail: { value: undefined, source: "environment"
+          + },                                                           
+      386 +        });                                                   
+      387 +      });                                                     
+      388 +                                                              
+      389 +      it("does not save anything or log any warnings", async (
+          +) => {                                                        
+      390 +        const warn = vi.spyOn(Logger, "warn");                
+      391 +                                                              
+      392 +        await EmailSetting.resolve();                         
+      393 +                                                              
+      394 +        expect(await EmailSetting.count()).toEqual(0);        
+      395 +        expect(warn).not.toHaveBeenCalled();                  
+      396 +      });                                                     
+      397 +    });                                                       
+      398    });
+      399  });
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● These tests pass already, since criteria 1 and 3 cover this. I'm running a
+  temporary check for a regression that logs a warning on every env-var
+  fallback, which would flood logs for installs that never saved a setting. 
+  · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The mutated test failed and the file is restored, so all 28 pass. Next I'm
+  running a type check and lint on just the changed files, using a scratch
+  tsconfig because the full project tsc was stopped earlier. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● tsc reported 524 errors, none of them in the changed files. I'll check whether
+  they're real or come from my scoped config:
+
+  Ran 4 shell commands (ctrl+o to expand)
+
+● One type error remains, at server/utils/fetch.ts:171, an Agent typing mismatch
+  in a file outside the diff that only gets checked because the changed files
+  import it. Next I'll run lint and format on the changed files, then review the
+  diff. · summary
+
+  Ran 5 shell commands, wrote 1 memory · 1 failed (ctrl+o to expand)
+
+● I built the resolution layer as EmailSetting.resolve() on the model. All 28
+  tests pass, and lint and format are clean on the changed files. The type check
+  found nothing in the changed files; it reported one error in a file I didn't
+  touch. Nothing is committed, and the password, API, UI and mailer are
+  untouched.
+
+  Nothing calls resolve() yet, so email still uses the env vars exactly as
+  before. Hooking it into the mailer is the next step, and you said not to touch
+  the mailer.
+
+  Each criterion
+
+  Criterion: 1. Admin value wins, otherwise env, and each reports its source.
+    Covers both set, admin only with env unset, env only, and neither.
+  Failing first?: Yes, 4 tests failed: resolve is not a function
+  Change that made it pass: Added resolve(), which looks for a stored row and
+    falls back to env
+  ────────────────────────────────────────
+  Criterion: 2. Removing an admin value falls back to env
+  Failing first?: No, it passed straight away. Removing means deleting the
+    row, and resolve() reads the table on every call.
+  Change that made it pass: None needed. I temporarily added a cache to
+    resolve() and the test failed, then I restored the file.
+  ────────────────────────────────────────
+  Criterion: 3. An invalid stored value is ignored, the env value is used, and
+    a warning is logged without the value
+  Failing first?: Yes, 2 failed: the invalid value came back as { value:
+    99999, source: 'admin' } and no warning was logged
+  Change that made it pass: resolve() re-checks each stored value with the
+    save rules, logs the key name only, and falls back
+  ────────────────────────────────────────
+  Criterion: 4. Never saved: every value comes from env and nothing changes
+  Failing first?: No, it passed straight away. Criteria 1 and 3 already cover
+    it.
+  Change that made it pass: None needed. I temporarily added a warning on
+    every fallback and the "no warnings" test failed, then I restored the
+    file.
+
+  Check results
+
+  - Tests: yarn test server/models/EmailSetting.test.ts gives 28 of 28 passing.
+    That's 18 from the storage work and 10 new ones.
+  - Lint: oxlint exits 0 with no findings. oxfmt --check says all 4 files are
+    formatted correctly.
+  - Type check: no errors in the changed files.
+    - It reported one error outside them: server/utils/fetch.ts:171, a mismatch
+      between Node's http Agent types (TS2322). I didn't touch that file; it
+      gets checked because the changed files import it indirectly.
+    - I didn't check whether a full yarn tsc reports it too.
+    - I checked only the changed files because you stopped the full run earlier.
+      I used a throwaway tsconfig in the scratchpad that lists them plus the
+      repo's typings files; without the typings, tsc reports 524 false errors.
+
+  git diff --stat
+
+  New files are untracked, so git diff --stat shows only:
+   server/models/index.ts | 2 ++
+   1 file changed, 2 insertions(+)
+  The untracked files are
+  server/migrations/20261119000000-create-email-settings.js (45 lines),
+  server/models/EmailSetting.ts (152 lines) and
+  server/models/EmailSetting.test.ts (399 lines). .specstory/ was already there
+  and is untouched.
+
+  Full diff
+
+  diff --git a/server/models/index.ts b/server/models/index.ts
+  @@ -80,3 +80,5 @@ export { default as Emoji } from "./Emoji";
+   export { default as UserPasskey } from "./UserPasskey";
+
+   export { default as AccessRequest } from "./AccessRequest";
+  +
+  +export { EmailSetting } from "./EmailSetting";
+
+  diff --git a/server/migrations/20261119000000-create-email-settings.js 
+  b/server/migrations/20261119000000-create-email-settings.js
+  new file mode 100644
+  +"use strict";
+  +
+  +/** @type {import('sequelize-cli').Migration} */
+  +module.exports = {
+  +  async up(queryInterface, Sequelize) {
+  +    await queryInterface.createTable("email_settings", {
+  +      id: {
+  +        type: Sequelize.UUID,
+  +        allowNull: false,
+  +        primaryKey: true,
+  +      },
+  +      key: {
+  +        type: Sequelize.STRING,
+  +        allowNull: false,
+  +        unique: true,
+  +      },
+  +      value: {
+  +        type: Sequelize.JSONB,
+  +        allowNull: false,
+  +      },
+  +      // Nullable so that hard-deleting a user keeps the setting and only 
+  loses
+  +      // the attribution; the model requires a user on every save.
+  +      updatedById: {
+  +        type: Sequelize.UUID,
+  +        allowNull: true,
+  +        references: {
+  +          model: "users",
+  +        },
+  +        onDelete: "SET NULL",
+  +      },
+  +      createdAt: {
+  +        type: Sequelize.DATE,
+  +        allowNull: false,
+  +      },
+  +      updatedAt: {
+  +        type: Sequelize.DATE,
+  +        allowNull: false,
+  +      },
+  +    });
+  +  },
+  +
+  +  async down(queryInterface) {
+  +    await queryInterface.dropTable("email_settings");
+  +  },
+  +};
+
+  diff --git a/server/models/EmailSetting.ts b/server/models/EmailSetting.ts
+  new file mode 100644
+  +import type { InferAttributes, InferCreationAttributes } from "sequelize";
+  +import {
+  +  AllowNull,
+  +  BelongsTo,
+  +  Column,
+  +  DataType,
+  +  ForeignKey,
+  +  Table,
+  +} from "sequelize-typescript";
+  +import env from "@server/env";
+  +import Logger from "@server/logging/Logger";
+  +import { isMailboxAddress } from "@server/utils/validators";
+  +import User from "./User";
+  +import IdModel from "./base/IdModel";
+  +import Fix from "./decorators/Fix";
+  +
+  +/**
+  + * An email setting saved by an admin. Settings are installation-wide, and a
+  + * saved value takes precedence over the matching environment variable.
+  + */
+  +@Table({
+  +  tableName: "email_settings",
+  +  modelName: "email_setting",
+  +  validate: {
+  +    isValidForKey(this: EmailSetting) {
+  +      if (!isValidEmailSettingValue(this.key, this.value)) {
+  +        throw new Error(`Invalid value for email setting "${this.key}"`);
+  +      }
+  +    },
+  +  },
+  +})
+  +@Fix
+  +export class EmailSetting extends IdModel<
+  +  InferAttributes<EmailSetting>,
+  +  Partial<InferCreationAttributes<EmailSetting>>
+  +> {
+  +  /**
+  +   * Works out the effective value of every email setting. An admin value 
+  wins
+  +   * over the environment variable, and each value reports where it came 
+  from.
+  +   *
+  +   * @returns the effective value and source of each setting.
+  +   */
+  +  public static async resolve(): Promise<ResolvedEmailSettings> {
+  +    const stored = new Map(
+  +      (await this.findAll()).map((setting) => [setting.key, setting.value])
+  +    );
+  +    const fromEnvironment = environmentValues();
+  +
+  +    const resolveKey = (key: EmailSettingKey): ResolvedEmailSetting => {
+  +      const value = stored.get(key);
+  +      if (value === undefined) {
+  +        return { value: fromEnvironment[key], source: "environment" };
+  +      }
+  +      if (!isValidEmailSettingValue(key, value)) {
+  +        // The value is deliberately not logged, it may be sensitive.
+  +        Logger.warn(
+  +          `Ignoring invalid stored email setting "${key}", using the 
+  environment value instead`
+  +        );
+  +        return { value: fromEnvironment[key], source: "environment" };
+  +      }
+  +      return { value, source: "admin" };
+  +    };
+  +
+  +    return {
+  +      host: resolveKey("host"),
+  +      port: resolveKey("port"),
+  +      fromEmail: resolveKey("fromEmail"),
+  +    };
+  +  }
+  +
+  +  /** The name of the setting, for example "host". */
+  +  @Column(DataType.STRING)
+  +  key: EmailSettingKey;
+  +
+  +  /** The saved value of the setting. */
+  +  @Column(DataType.JSONB)
+  +  value: string | number;
+  +
+  +  // associations
+  +
+  +  /** The user who last changed the setting. */
+  +  @BelongsTo(() => User, "updatedById")
+  +  updatedBy: User | null;
+  +
+  +  /** The ID of the user who last changed the setting; updatedAt records 
+  when. */
+  +  @AllowNull(false)
+  +  @ForeignKey(() => User)
+  +  @Column(DataType.UUID)
+  +  updatedById: string | null;
+  +}
+  +
+  +/** The email settings that an admin can save. */
+  +export type EmailSettingKey = "host" | "port" | "fromEmail";
+  +
+  +/** Where the effective value of an email setting came from. */
+  +export type EmailSettingSource = "admin" | "environment";
+  +
+  +/** The effective value of an email setting and where it came from. */
+  +export interface ResolvedEmailSetting {
+  +  /** The effective value, or undefined if neither source sets it. */
+  +  value: string | number | undefined;
+  +  /** Whether the value came from an admin or the environment. */
+  +  source: EmailSettingSource;
+  +}
+  +
+  +/** The effective value of every email setting. */
+  +export type ResolvedEmailSettings = Record<
+  +  EmailSettingKey,
+  +  ResolvedEmailSetting
+  +>;
+  +
+  +/**
+  + * Reads the environment variable behind each email setting. Read on every 
+  call
+  + * so that the current environment is always used.
+  + *
+  + * @returns the environment value of each setting.
+  + */
+  +function environmentValues(): Record<
+  +  EmailSettingKey,
+  +  string | number | undefined
+  +> {
+  +  return {
+  +    host: env.SMTP_HOST,
+  +    port: env.SMTP_PORT,
+  +    fromEmail: env.SMTP_FROM_EMAIL,
+  +  };
+  +}
+  +
+  +/**
+  + * Checks whether a value is acceptable for the given email setting.
+  + *
+  + * @param key the name of the setting.
+  + * @param value the value to check.
+  + * @returns true if the value can be saved, false otherwise.
+  + */
+  +function isValidEmailSettingValue(key: EmailSettingKey, value: unknown) {
+  +  switch (key) {
+  +    case "host":
+  +      return typeof value === "string" && value.trim() !== "";
+  +    case "port":
+  +      return (
+  +        typeof value === "number" &&
+  +        Number.isInteger(value) &&
+  +        value >= 1 &&
+  +        value <= 65535
+  +      );
+  +    case "fromEmail":
+  +      return typeof value === "string" && isMailboxAddress(value);
+  +    default:
+  +      return false;
+  +  }
+  +}
+
+  diff --git a/server/models/EmailSetting.test.ts 
+  b/server/models/EmailSetting.test.ts
+  new file mode 100644
+  +import { QueryTypes, Sequelize, ValidationError } from "sequelize";
+  +import env from "@server/env";
+  +import Logger from "@server/logging/Logger";
+  +import type { User } from "@server/models";
+  +import { EmailSetting } from "@server/models";
+  +import { sequelize } from "@server/storage/database";
+  +import { buildAdmin } from "@server/test/factories";
+  +
+  +/**
+  + * Reads the stored email settings through a brand new database connection,
+  + * which shares no in-memory state with the running app. This is what a 
+  server
+  + * sees after it restarts.
+  + *
+  + * @returns the stored rows, ordered by key.
+  + */
+  +async function readAfterRestart() {
+  +  const fresh = new Sequelize(env.DATABASE_URL ?? "", { logging: false });
+  +  try {
+  +    return await fresh.query<{ key: string; value: unknown }>(
+  +      `SELECT key, value FROM email_settings ORDER BY key`,
+  +      { type: QueryTypes.SELECT }
+  +    );
+  +  } finally {
+  +    await fresh.close();
+  +  }
+  +}
+  +
+  +/**
+  + * Reads who last changed each stored email setting, and when, through a 
+  brand
+  + * new database connection.
+  + *
+  + * @returns the stored rows, ordered by key.
+  + */
+  +async function readAuditAfterRestart() {
+  +  const fresh = new Sequelize(env.DATABASE_URL ?? "", { logging: false });
+  +  try {
+  +    return await fresh.query<{
+  +      key: string;
+  +      updatedById: string | null;
+  +      updatedAt: Date;
+  +    }>(
+  +      `SELECT key, "updatedById", "updatedAt" FROM email_settings ORDER BY 
+  key`,
+  +      { type: QueryTypes.SELECT }
+  +    );
+  +  } finally {
+  +    await fresh.close();
+  +  }
+  +}
+  +
+  +describe("EmailSetting", () => {
+  +  let admin: User;
+  +
+  +  beforeEach(async () => {
+  +    await EmailSetting.destroy({ where: {}, truncate: true });
+  +    admin = await buildAdmin();
+  +  });
+  +
+  +  describe("persistence", () => {
+  +    it("keeps saved settings after a server restart", async () => {
+  +      await EmailSetting.create({
+  +        key: "host",
+  +        value: "smtp.example.com",
+  +        updatedById: admin.id,
+  +      });
+  +      await EmailSetting.create({
+  +        key: "port",
+  +        value: 587,
+  +        updatedById: admin.id,
+  +      });
+  +      await EmailSetting.create({
+  +        key: "fromEmail",
+  +        value: "noreply@example.com",
+  +        updatedById: admin.id,
+  +      });
+  +
+  +      expect(await readAfterRestart()).toEqual([
+  +        { key: "fromEmail", value: "noreply@example.com" },
+  +        { key: "host", value: "smtp.example.com" },
+  +        { key: "port", value: 587 },
+  +      ]);
+  +    });
+  +
+  +    it("keeps the latest saved value after a server restart", async () => {
+  +      const setting = await EmailSetting.create({
+  +        key: "host",
+  +        value: "smtp.old.example.com",
+  +        updatedById: admin.id,
+  +      });
+  +      await setting.update({ value: "smtp.new.example.com" });
+  +
+  +      expect(await readAfterRestart()).toEqual([
+  +        { key: "host", value: "smtp.new.example.com" },
+  +      ]);
+  +    });
+  +  });
+  +
+  +  describe("validation", () => {
+  +    it.each([
+  +      ["0", 0],
+  +      ["65536", 65536],
+  +      ["a non-integer", 25.5],
+  +      ["a non-number", "abc"],
+  +    ])("rejects a port of %s before saving", async (_label, value) => {
+  +      await expect(
+  +        EmailSetting.create({ key: "port", value, updatedById: admin.id })
+  +      ).rejects.toBeInstanceOf(ValidationError);
+  +      expect(await EmailSetting.count()).toEqual(0);
+  +    });
+  +
+  +    it.each([
+  +      ["1", 1],
+  +      ["65535", 65535],
+  +    ])("accepts a port of %s", async (_label, value) => {
+  +      await EmailSetting.create({ key: "port", value, updatedById: admin.id 
+  });
+  +      expect(await readAfterRestart()).toEqual([{ key: "port", value }]);
+  +    });
+  +
+  +    it.each([
+  +      ["an empty host", ""],
+  +      ["a host of only spaces", "   "],
+  +    ])("rejects %s before saving", async (_label, value) => {
+  +      await expect(
+  +        EmailSetting.create({ key: "host", value, updatedById: admin.id })
+  +      ).rejects.toBeInstanceOf(ValidationError);
+  +      expect(await EmailSetting.count()).toEqual(0);
+  +    });
+  +
+  +    it.each([
+  +      ["no @ sign", "not-an-email"],
+  +      ["no domain", "noreply@"],
+  +      ["an empty value", ""],
+  +    ])(
+  +      "rejects a from address with %s before saving",
+  +      async (_label, value) => {
+  +        await expect(
+  +          EmailSetting.create({
+  +            key: "fromEmail",
+  +            value,
+  +            updatedById: admin.id,
+  +          })
+  +        ).rejects.toBeInstanceOf(ValidationError);
+  +        expect(await EmailSetting.count()).toEqual(0);
+  +      }
+  +    );
+  +
+  +    it("accepts a valid from address", async () => {
+  +      await EmailSetting.create({
+  +        key: "fromEmail",
+  +        value: "noreply@example.com",
+  +        updatedById: admin.id,
+  +      });
+  +      expect(await readAfterRestart()).toEqual([
+  +        { key: "fromEmail", value: "noreply@example.com" },
+  +      ]);
+  +    });
+  +
+  +    it("keeps the saved value when an update is invalid", async () => {
+  +      const setting = await EmailSetting.create({
+  +        key: "host",
+  +        value: "smtp.example.com",
+  +        updatedById: admin.id,
+  +      });
+  +
+  +      await expect(setting.update({ value: "   " })).rejects.toBeInstanceOf(
+  +        ValidationError
+  +      );
+  +      expect(await readAfterRestart()).toEqual([
+  +        { key: "host", value: "smtp.example.com" },
+  +      ]);
+  +    });
+  +  });
+  +
+  +  describe("audit", () => {
+  +    afterEach(() => {
+  +      vi.useRealTimers();
+  +    });
+  +
+  +    it("records who saved a setting and when", async () => {
+  +      vi.useFakeTimers({ toFake: ["Date"] });
+  +      const savedAt = new Date("2026-03-01T10:00:00.000Z");
+  +      vi.setSystemTime(savedAt);
+  +
+  +      await EmailSetting.create({
+  +        key: "host",
+  +        value: "smtp.example.com",
+  +        updatedById: admin.id,
+  +      });
+  +
+  +      expect(await readAuditAfterRestart()).toEqual([
+  +        { key: "host", updatedById: admin.id, updatedAt: savedAt },
+  +      ]);
+  +    });
+  +
+  +    it("records the latest person to change a setting and when", async () => 
+  {
+  +      const otherAdmin = await buildAdmin();
+  +      vi.useFakeTimers({ toFake: ["Date"] });
+  +      vi.setSystemTime(new Date("2026-03-01T10:00:00.000Z"));
+  +      const setting = await EmailSetting.create({
+  +        key: "port",
+  +        value: 25,
+  +        updatedById: admin.id,
+  +      });
+  +
+  +      const changedAt = new Date("2026-03-02T15:30:00.000Z");
+  +      vi.setSystemTime(changedAt);
+  +      await setting.update({ value: 587, updatedById: otherAdmin.id });
+  +
+  +      expect(await readAuditAfterRestart()).toEqual([
+  +        { key: "port", updatedById: otherAdmin.id, updatedAt: changedAt },
+  +      ]);
+  +    });
+  +
+  +    it("rejects a setting saved without recording who changed it", async () 
+  => {
+  +      await expect(
+  +        EmailSetting.create({ key: "host", value: "smtp.example.com" })
+  +      ).rejects.toBeInstanceOf(ValidationError);
+  +      expect(await EmailSetting.count()).toEqual(0);
+  +    });
+  +  });
+  +
+  +  describe("resolve", () => {
+  +    const original = {
+  +      SMTP_HOST: env.SMTP_HOST,
+  +      SMTP_PORT: env.SMTP_PORT,
+  +      SMTP_FROM_EMAIL: env.SMTP_FROM_EMAIL,
+  +    };
+  +
+  +    beforeEach(() => {
+  +      env.SMTP_HOST = "smtp.env.example.com";
+  +      env.SMTP_PORT = 2525;
+  +      env.SMTP_FROM_EMAIL = "env@example.com";
+  +    });
+  +
+  +    afterEach(() => {
+  +      env.SMTP_HOST = original.SMTP_HOST;
+  +      env.SMTP_PORT = original.SMTP_PORT;
+  +      env.SMTP_FROM_EMAIL = original.SMTP_FROM_EMAIL;
+  +    });
+  +
+  +    it("uses the admin value when both an admin value and an environment 
+  variable exist", async () => {
+  +      await EmailSetting.create({
+  +        key: "host",
+  +        value: "smtp.admin.example.com",
+  +        updatedById: admin.id,
+  +      });
+  +
+  +      const settings = await EmailSetting.resolve();
+  +
+  +      expect(settings.host).toEqual({
+  +        value: "smtp.admin.example.com",
+  +        source: "admin",
+  +      });
+  +    });
+  +
+  +    it("uses the admin value when the environment variable is unset", async 
+  () => {
+  +      env.SMTP_PORT = undefined;
+  +      await EmailSetting.create({
+  +        key: "port",
+  +        value: 587,
+  +        updatedById: admin.id,
+  +      });
+  +
+  +      const settings = await EmailSetting.resolve();
+  +
+  +      expect(settings.port).toEqual({ value: 587, source: "admin" });
+  +    });
+  +
+  +    it("uses the environment variable when there is no admin value", async ()
+  => {
+  +      await EmailSetting.create({
+  +        key: "host",
+  +        value: "smtp.admin.example.com",
+  +        updatedById: admin.id,
+  +      });
+  +
+  +      const settings = await EmailSetting.resolve();
+  +
+  +      expect(settings.port).toEqual({ value: 2525, source: "environment" });
+  +      expect(settings.fromEmail).toEqual({
+  +        value: "env@example.com",
+  +        source: "environment",
+  +      });
+  +    });
+  +
+  +    it("reports an unset value from the environment when neither exists", 
+  async () => {
+  +      env.SMTP_FROM_EMAIL = undefined;
+  +
+  +      const settings = await EmailSetting.resolve();
+  +
+  +      expect(settings.fromEmail).toEqual({
+  +        value: undefined,
+  +        source: "environment",
+  +      });
+  +    });
+  +
+  +    it("falls back to the environment variable when the admin value is 
+  removed", async () => {
+  +      const setting = await EmailSetting.create({
+  +        key: "host",
+  +        value: "smtp.admin.example.com",
+  +        updatedById: admin.id,
+  +      });
+  +      expect((await EmailSetting.resolve()).host.source).toEqual("admin");
+  +
+  +      await setting.destroy();
+  +
+  +      expect((await EmailSetting.resolve()).host).toEqual({
+  +        value: "smtp.env.example.com",
+  +        source: "environment",
+  +      });
+  +    });
+  +
+  +    describe("with a stored value that fails validation", () => {
+  +      /**
+  +       * Stores a value directly in the database, skipping model validation, 
+  as
+  +       * happens when a value was saved before the rules changed.
+  +       *
+  +       * @param key the name of the setting.
+  +       * @param value the value to store.
+  +       */
+  +      async function storeWithoutValidation(key: string, value: unknown) {
+  +        await sequelize.query(
+  +          `INSERT INTO email_settings (id, key, value, "updatedById", 
+  "createdAt", "updatedAt")
+  +           VALUES (gen_random_uuid(), :key, :value, :updatedById, now(), 
+  now())`,
+  +          {
+  +            replacements: {
+  +              key,
+  +              value: JSON.stringify(value),
+  +              updatedById: admin.id,
+  +            },
+  +          }
+  +        );
+  +      }
+  +
+  +      afterEach(() => {
+  +        vi.restoreAllMocks();
+  +      });
+  +
+  +      it("ignores it and uses the environment variable", async () => {
+  +        await storeWithoutValidation("port", 99999);
+  +        await storeWithoutValidation("fromEmail", "leaked-secret-value");
+  +
+  +        const settings = await EmailSetting.resolve();
+  +
+  +        expect(settings.port).toEqual({ value: 2525, source: "environment" 
+  });
+  +        expect(settings.fromEmail).toEqual({
+  +          value: "env@example.com",
+  +          source: "environment",
+  +        });
+  +      });
+  +
+  +      it("logs a warning that does not include the value", async () => {
+  +        const warn = vi.spyOn(Logger, "warn");
+  +        await storeWithoutValidation("port", 99999);
+  +        await storeWithoutValidation("fromEmail", "leaked-secret-value");
+  +
+  +        await EmailSetting.resolve();
+  +
+  +        expect(warn).toHaveBeenCalled();
+  +        const logged = JSON.stringify(warn.mock.calls);
+  +        expect(logged).not.toContain("99999");
+  +        expect(logged).not.toContain("leaked-secret-value");
+  +      });
+  +    });
+  +
+  +    describe("on an installation that has never saved a setting", () => {
+  +      afterEach(() => {
+  +        vi.restoreAllMocks();
+  +      });
+  +
+  +      it("takes every value from the environment", async () => {
+  +        expect(await EmailSetting.resolve()).toEqual({
+  +          host: { value: "smtp.env.example.com", source: "environment" },
+  +          port: { value: 2525, source: "environment" },
+  +          fromEmail: { value: "env@example.com", source: "environment" },
+  +        });
+  +      });
+  +
+  +      it("takes every value from the environment when none are set", async ()
+  => {
+  +        env.SMTP_HOST = undefined;
+  +        env.SMTP_PORT = undefined;
+  +        env.SMTP_FROM_EMAIL = undefined;
+  +
+  +        expect(await EmailSetting.resolve()).toEqual({
+  +          host: { value: undefined, source: "environment" },
+  +          port: { value: undefined, source: "environment" },
+  +          fromEmail: { value: undefined, source: "environment" },
+  +        });
+  +      });
+  +
+  +      it("does not save anything or log any warnings", async () => {
+  +        const warn = vi.spyOn(Logger, "warn");
+  +
+  +        await EmailSetting.resolve();
+  +
+  +        expect(await EmailSetting.count()).toEqual(0);
+  +        expect(warn).not.toHaveBeenCalled();
+  +      });
+  +    });
+  +  });
+  +});
+
+  File by file
+
+  server/migrations/20261119000000-create-email-settings.js (new)
+
+  What: creates email_settings, with one row per setting. Columns are key
+  (unique), value (JSONB), updatedById (references users, and becomes NULL if
+  that user is deleted), createdAt and updatedAt. down drops the table. I ran it
+  down and up on the test database and it worked.
+
+  Why: one row per setting lets each value record who changed it and when. JSONB
+  keeps the port as a number and the host as a string.
+
+  What could go wrong:
+  - These settings apply to the whole server; there's no teamId. If one
+    installation hosts several teams, any team's admin would change email for
+    every team. This is a design choice you should confirm.
+  - down deletes every saved setting for good.
+  - updatedById can be NULL in the database even though the model requires a
+    user. That's deliberate: if a user is fully deleted, their settings stay and
+    only lose the "changed by" link. As a result, the database alone doesn't
+    guarantee a value is there.
+  - The database doesn't generate id; the model does. Anything that inserts rows
+    with raw SQL has to supply one.
+  - There's no history. Each row only remembers the last person to change it and
+    when. A full history would need the Event log, which has the non-null
+    teamId problem I raised earlier.
+
+  server/models/EmailSetting.ts (new)
+
+  What: the model has two parts:
+  - Checks on save:
+    - Host can't be empty or just spaces.
+    - Port must be an integer from 1 to 65535.
+    - The from address must pass isMailboxAddress, the same check the
+      SMTP_FROM_EMAIL env var uses.
+    - Unknown keys are rejected.
+    - Every save needs a user.
+  - EmailSetting.resolve():
+    - Returns { host, port, fromEmail }, each as { value, source: "admin" | 
+      "environment" }.
+    - A stored value that fails the checks is ignored, and a warning is logged
+      with the key name only.
+
+  Why: AGENTS.md puts business logic in models. The same function is used for
+  both checks, so the rules for saving and reading can't drift apart. Env values
+  are read on every call, so changes take effect without a restart.
+
+  What could go wrong:
+  - Mixed sources. Each setting is resolved on its own, so the admin's host can
+    end up with the env's port, which may be meant for a different server.
+    Per-value sources are what the design asks for, but the admin page should
+    make this visible.
+  - Conflict with SMTP_SERVICE. The env config refuses SMTP_HOST and
+    SMTP_SERVICE together. If the env sets SMTP_SERVICE and an admin saves a
+    host, resolve() returns the admin host while the service is still set.
+    Nothing handles that yet.
+  - Wiring it in. resolve() queries the database on every call. Once the mailer
+    uses it, that's a query per email, and the transport is still built once at
+    startup. Caching would bring back the stale-value bug the removal test
+    caught. Each worker process also needs to rebuild its transport after a
+    change.
+  - Log noise. An invalid row logs a warning every time resolve() runs.
+  - Env values aren't checked. The env vars have weaker checks; for example,
+    SMTP_PORT=0 passes env.ts. Env values pass through resolve() unchanged, as
+    you asked.
+  - Loose types.
+    - value is typed string | number for every key rather than per key, so
+      callers have to narrow it.
+    - updatedById is typed string | null, so TypeScript won't catch a missing
+      user; only the runtime check will.
+  - No permission check. Any user ID is accepted as "changed by". Checking that
+    it's an admin belongs in the API policy, which you asked me not to touch.
+
+  server/models/index.ts (+2 lines)
+
+  What: exports EmailSetting.
+
+  Why: Sequelize registers models through this file.
+
+  What could go wrong: every process now loads the model. Any database that
+  hasn't run the migration, including CI's test database, gets "relation does
+  not exist" errors as soon as something queries it. Nothing outside the tests
+  queries it yet.
+
+  server/models/EmailSetting.test.ts (new)
+
+  What: the 18 storage tests plus 10 resolution tests.
+
+  Why: each test asserts what the criteria require, not what the code currently
+  returns.
+
+  What could go wrong:
+  - The restart is simulated. The test reads back over a new database connection
+    rather than restarting a process.
+  - Parallel runs. beforeEach truncates email_settings. That's safe while this
+    is the only test file using the table; a second file running in parallel
+    could interfere.
+  - Global env changes. The tests change env.SMTP_* globally and restore it in
+    afterEach.
+  - Leak check scope. The check that the value isn't logged only searches
+    Logger.warn calls.
+  - Postgres version. gen_random_uuid() needs Postgres 13 or later.
+
+  Other changes I made along the way
+
+  - Started the postgres and redis Docker containers; they're still running.
+  - Migrated the test database, including two existing main migrations that
+    hadn't been applied to it yet, plus this one.
+  - Saved a memory note to type-check and lint only the changed files.
+
+  Waiting for your next step.
+✻ Crunched for 6m 53s · done 6:43 PM
