@@ -18,6 +18,7 @@ import useCurrentTeam from "~/hooks/useCurrentTeam";
 import useStores from "~/hooks/useStores";
 import isCloudHosted from "~/utils/isCloudHosted";
 import SettingRow from "./components/SettingRow";
+import CredentialScan from "./components/CredentialScan";
 
 function Security() {
   const { dialogs } = useStores();
@@ -436,6 +437,7 @@ function Security() {
           />
         </SettingRow>
       )}
+      <CredentialScan />
     </Scene>
   );
 }
