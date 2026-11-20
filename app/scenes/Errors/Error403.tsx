@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistory, useLocation } from "react-router-dom";
+import { toast } from "sonner";
+import { errToString } from "@shared/utils/error";
 import Button from "~/components/Button";
 import Empty from "~/components/Empty";
 import Heading from "~/components/Heading";
@@ -13,6 +15,7 @@ import useCurrentUser from "~/hooks/useCurrentUser";
 import useStores from "~/hooks/useStores";
 import Loading from "~/scenes/Document/components/Loading";
 import { client } from "~/utils/ApiClient";
+import { NotFoundError } from "~/utils/errors";
 
 type Props = {
   /** The document ID to request access to. */
@@ -36,20 +39,35 @@ const Error403 = ({ documentId, isCollection }: Props) => {
       return;
     }
 
+    // Ignore the result if the user has navigated away in the meantime.
+    let cancelled = false;
+
     const checkRequested = async () => {
       try {
         const request = await client.post("/accessRequests.info", {
           documentId,
         });
-        setRequested(request?.data?.status === "pending");
-      } catch {
-        // No pending request or error — leave as not requested
+        if (!cancelled) {
+          setRequested(request?.data?.status === "pending");
+        }
+      } catch (err) {
+        // A 404 means there is no pending request; any other failure leaves the
+        // status unknown, so surface it instead of treating it as "not requested".
+        if (!cancelled && !(err instanceof NotFoundError)) {
+          toast.error(errToString(err));
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     void checkRequested();
+
+    return () => {
+      cancelled = true;
+    };
   }, [documentId, user]);
 
   const handleRequestAccess = useCallback(() => {
@@ -94,9 +112,13 @@ const Error403 = ({ documentId, isCollection }: Props) => {
               ? t(
                   "It doesn't look like you have permission to access this collection."
                 )
-              : t(
-                  "It doesn't look like you have permission to access this document. You can request access."
-                )}
+              : canRequest
+                ? t(
+                    "It doesn't look like you have permission to access this document. You can request access."
+                  )
+                : t(
+                    "It doesn't look like you have permission to access this document."
+                  )}
           </Empty>
         )}
         <HStack gap={8}>
